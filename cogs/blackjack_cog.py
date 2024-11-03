@@ -57,7 +57,7 @@ class Blackjack(commands.Cog):
     @app_commands.command(
         name="blackjack", description="Start or join a game of Blackjack!"
     )
-    async def blackjack(self, interaction: discord.Interaction, bet: int = 0):
+    async def blackjack(self, interaction: discord.Interaction, bet: int):
         """Slash command for beginning or joining a blackjack game."""
         if bet < 0:
             await interaction.response.send_message(

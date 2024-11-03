@@ -17,7 +17,7 @@ class Economy(commands.Cog):
         self.bot = bot
         self.database = os.path.join(data_path, "economy.db")
 
-        self.DEFAULT_BALANCE = 500
+        self.DEFAULT_BALANCE = 1500
 
     @commands.Cog.listener()
     async def on_ready(self):
