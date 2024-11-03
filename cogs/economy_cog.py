@@ -45,12 +45,12 @@ class Economy(commands.Cog):
         await self.deposit(member, value)
         await interaction.response.send_message(f"{interaction.user.mention} sent {member.mention} {value} gold.")
 
-    async def validate_funds(self, user, value):
+    async def validate_funds(self, user: discord.User, value: int) -> bool:
         """Check if user has enough funds."""
         funds = await self._fetch_funds(user)
         return funds >= value
 
-    async def withdraw(self, user, value):
+    async def withdraw(self, user: discord.User, value: int) -> bool:
         """Withdraw funds from a user's balance."""
         # Validate requested value
         if value < 0:
@@ -63,7 +63,7 @@ class Economy(commands.Cog):
         await self._update_funds(user, -value)
         return True
 
-    async def deposit(self, user, value):
+    async def deposit(self, user: discord.User, value) -> bool:
         """Deposit funds into a user's balance."""
         # Validate requested value
         if value < 0:
@@ -73,7 +73,7 @@ class Economy(commands.Cog):
         await self._update_funds(user, value)
         return True
 
-    async def _update_funds(self, user, delta):
+    async def _update_funds(self, user: discord.User, delta: int) -> None:
         """Update a user's balance"""
         # Get users current & new balance
         current_funds = await self._fetch_funds(user)
@@ -90,7 +90,7 @@ class Economy(commands.Cog):
         connection.commit()
         connection.close()
 
-    async def _fetch_funds(self, user) -> int:
+    async def _fetch_funds(self, user: discord.User) -> int:
         """Get a user's balance"""
         # Make connection to database
         connection = sqlite3.connect(self.database)
@@ -103,8 +103,8 @@ class Economy(commands.Cog):
         # Insert user is they don't already exist
         if result is None:
             cursor.execute(
-                "INSERT INTO Bank (user_id, balance) VALUES (?,?)",
-                (user.id, self.DEFAULT_BALANCE),
+                "INSERT INTO Bank (user_id, user_name, balance) VALUES (?,?,?)",
+                (user.id, user.name, self.DEFAULT_BALANCE),
             )
             balance = self.DEFAULT_BALANCE
         else:
