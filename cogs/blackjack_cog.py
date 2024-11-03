@@ -10,6 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cogs.deck import Deck, Card
+from cogs.economy_cog import Economy
 
 
 class GameState(Enum):
@@ -37,14 +38,16 @@ class Player:
 class Blackjack(commands.Cog):
     """A cog that implements blackjack functionality"""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, economy_cog: Economy):
         self.bot = bot
         self.game_state = GameState.NO_GAME
         self.table = set()  # Set of players in the game
         self.text_channel: discord.TextChannel = None
 
         self.pending_game_delay = 10  # seconds
-        self.message_delay = 2 # seconds, add artificial delay between messages
+        self.message_delay = 2  # seconds, add artificial delay between messages
+
+        self.economy = economy_cog
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -56,7 +59,17 @@ class Blackjack(commands.Cog):
     )
     async def blackjack(self, interaction: discord.Interaction, bet: int = 0):
         """Slash command for beginning or joining a blackjack game."""
-        # TODO - Bet validation
+        if bet < 0:
+            await interaction.response.send_message(
+                "Bets must be at least 0 gold.", ephemeral=True
+            )
+            return
+        has_funds = await self.economy.validate_funds(interaction.user, bet)
+        if not has_funds:
+            await interaction.response.send_message(
+                "You do not have enough funds to make that bet!", ephemeral=True
+            )
+            return
 
         # Get command caller
         user = interaction.user
@@ -160,20 +173,27 @@ class Blackjack(commands.Cog):
         if winners:
             text = ""
             for player in winners:
-                text += f"{player.mention} won and cashed out {player.bet*2}!\n"
+                text += f"{player.mention} won and cashed out {player.bet*2} gold!\n"
             embed.add_field(name="WINNERS", value=text, inline=False)
         if losers:
             text = ""
             for player in losers:
-                text += f"{player.mention} lost their bet of {player.bet}.\n"
+                text += f"{player.mention} lost their bet of {player.bet} gold.\n"
             embed.add_field(name="LOSERS", value=text, inline=False)
         if ties:
             text = ""
             for player in ties:
-                text += f"{player.mention} tied and cashed out {player.bet}.\n"
+                text += f"{player.mention} tied and cashed out {player.bet} gold.\n"
             embed.add_field(name="TIES", value=text, inline=False)
 
         await self.send_message(embed=embed)
+
+        # Update balances
+        for player in winners:
+            await self.economy.deposit(player.user, player.bet)
+
+        for player in losers:
+            await self.economy.withdraw(player.user, player.bet)
 
         # Reset game state
         self.game_state = GameState.NO_GAME
@@ -239,9 +259,7 @@ class Blackjack(commands.Cog):
 
             await self.send_message(message)
 
-    async def dealer_turn(
-        self, hand: list[Card], deck: Deck
-    ) -> None:
+    async def dealer_turn(self, hand: list[Card], deck: Deck) -> None:
         """Go through the dealer's turn of blackjack.
 
         Play a full dealers turn, until the dealer can no longer draw cards.
@@ -279,12 +297,14 @@ class Blackjack(commands.Cog):
             await self.send_message(message)
             await asyncio.sleep(self.message_delay)
 
-    async def send_message(self, content: str = None, embed: discord.Embed = None) -> None:
+    async def send_message(
+        self, content: str = None, embed: discord.Embed = None
+    ) -> None:
         """Send a message to the channel hosting blackjack game."""
         if not self.text_channel:
             print("WARNING: Tried to send message but text channel not set.")
 
-        if content: 
+        if content:
             content += "\n" + "-" * 33
         await self.text_channel.send(content=content, embed=embed)
 

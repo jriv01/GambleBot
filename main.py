@@ -1,6 +1,7 @@
 """
 Build & run a Discord bot.
 """
+
 import asyncio
 from itertools import cycle
 import os
@@ -10,17 +11,19 @@ from discord.ext import commands, tasks
 import dotenv
 
 from cogs.blackjack_cog import Blackjack
+from cogs.economy_cog import Economy
 
 
 dotenv.load_dotenv()
 
 GUILD_ID = discord.Object(id=os.getenv("GUILD_ID"))
 
-possible_status = cycle(["Poker", "Blackjack", "Horse Racing", "Florjon"])
+possible_status = cycle(["Florjon", "Carlos", "Kimberly"])
 
 
 class Client(commands.Bot):
     """Main client that joins cogs together"""
+
     async def on_ready(self):
         """Listen for when client is ready."""
         print(f"Logged on as {self.user}!")
@@ -33,17 +36,7 @@ class Client(commands.Bot):
         except Exception as e:
             print("Error with syncing commands has occurred:\n", e)
 
-
-    async def on_message(self, message: discord.Message):
-        """Listen for messages."""
-        # Ignore bots own messages
-        if message.author == self.user:
-            return
-
-        if message.content.startswith("hello"):
-            await message.channel.send(f"Hi there {message.author}!")
-
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=260)
     async def change_bot_status(self):
         """Change the bot status every 30 seconds"""
         await self.change_presence(activity=discord.Game(next(possible_status)))
@@ -55,9 +48,16 @@ intents.message_content = True
 # Command prefix must still be included, even though they are "deprecated"
 client = Client(command_prefix="!", intents=intents)
 
+
 async def main():
     async with client:
-        await client.add_cog(Blackjack(client), guild=GUILD_ID)
+        # Initialize cogs
+        economy_cog = Economy(client, data_path=os.getenv("DATA_PATH"))
+        blackjack_cog = Blackjack(client, economy_cog=economy_cog)
+
+        # Initialize client
+        await client.add_cog(economy_cog, guild=GUILD_ID)
+        await client.add_cog(blackjack_cog, guild=GUILD_ID)
         await client.start(token=os.getenv("DISCORD_TOKEN"))
 
 
