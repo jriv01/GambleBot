@@ -28,7 +28,6 @@ class Card:
             return 11 if high_aces else 1
         elif not self.face.isdigit():
             return 10
-        
         return int(self.face)
 
     def __repr__(self):
