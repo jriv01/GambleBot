@@ -44,7 +44,7 @@ class Blackjack(commands.Cog):
         self.table = set()  # Set of players in the game
         self.text_channel: discord.TextChannel = None
 
-        self.pending_game_delay = 0  # seconds
+        self.pending_game_delay = 15  # seconds
         self.message_delay = 3  # seconds, add artificial delay between messages
 
         self.economy = economy_cog
@@ -133,7 +133,6 @@ class Blackjack(commands.Cog):
         # Get dealer hand
         dealer_hand = [deck.draw_card(), deck.draw_card()]
 
-
         # Play each players turn
         for player in self.table:
             await self.player_turn(player, deck, dealer_hand[-1])
@@ -190,12 +189,7 @@ class Blackjack(commands.Cog):
         self.table = set()
         self.text_channel = None
 
-    async def player_turn(
-        self,
-        player: Player,
-        deck: Deck,
-        dealer_card: Card
-    ) -> None:
+    async def player_turn(self, player: Player, deck: Deck, dealer_card: Card) -> None:
         """Go through a players turn of blackjack."""
 
         # Get starting hand
@@ -210,10 +204,11 @@ class Blackjack(commands.Cog):
         message_content += f"The dealer is currently showing...\n\t"
         message_content += f"{dealer_card.emoji} {dealer_card} for a value of {dealer_card.get_value()}\n\n"
         message_content += (
-            f"You drew a hand of... {hand_display}\n"
-            f"For a value of {hand_value}."
+            f"You drew a hand of... {hand_display}\nFor a value of {hand_value}."
         )
-        message_content += "\n\nWould you like to HIT or STAND?" if hand_value != 21 else ""
+        message_content += (
+            "\n\nWould you like to HIT or STAND?" if hand_value != 21 else ""
+        )
         message_content += "\n" + "=" * 30
         await self.text_channel.send(message_content)
 
@@ -271,7 +266,9 @@ class Blackjack(commands.Cog):
         dealer_value = self.get_hand_value(hand)
         await self.send_pending_message("Revealing dealer hand")
         message_content = "=" * 30 + "\n"
-        message_content += f"Dealer has drawn...{dealer_display}\nFor a value of {dealer_value}."
+        message_content += (
+            f"Dealer has drawn...{dealer_display}\nFor a value of {dealer_value}."
+        )
         message_content += "\n" + "=" * 30
         message = await self.text_channel.send(message_content)
         await asyncio.sleep(self.message_delay)

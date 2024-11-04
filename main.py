@@ -14,6 +14,7 @@ from cogs.casino.blackjack_cog import Blackjack
 from cogs.casino.dice_cog import Dice
 from cogs.economy_cog import Economy
 from cogs.casino.horse_racing_cog import HorseRacing
+from cogs.income_cog import Income
 
 
 dotenv.load_dotenv()
@@ -58,12 +59,14 @@ async def main():
         blackjack_cog = Blackjack(client, economy_cog=economy_cog)
         dice_cog = Dice(client, economy_cog=economy_cog)
         horse_cog = HorseRacing(client, economy_cog=economy_cog)
+        income_cog = Income(client, economy_cog=economy_cog)
 
         # Initialize client
         await client.add_cog(economy_cog, guild=GUILD_ID)
         await client.add_cog(blackjack_cog, guild=GUILD_ID)
         await client.add_cog(dice_cog, guild=GUILD_ID)
         await client.add_cog(horse_cog, guild=GUILD_ID)
+        await client.add_cog(income_cog, guild=GUILD_ID)
         await client.start(token=os.getenv("DISCORD_TOKEN"))
 
 
