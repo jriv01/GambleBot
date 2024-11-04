@@ -2,10 +2,11 @@
 Cog that implements horse racing.
 """
 
-import random
 import asyncio
-
 from enum import Enum
+import random
+import threading
+from typing import Callable
 
 import discord
 from discord import app_commands
@@ -61,57 +62,35 @@ class Player:
         return self.user.mention
 
 
-class HorseRacing(commands.Cog):
-    """A cog that implements horse racing functionality"""
+class HorseRacingSession:
+    """A guild session for a horse race."""
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
-        self.bot = bot
-        self.economy = economy_cog
+    def __init__(
+        self, guild: discord.Guild, economy: Economy, cleanup_function: Callable
+    ):
+        self.guild = guild
+        self.economy = economy
+        self.cleanup_function = cleanup_function
+
         self.players = set()
         self.game_state = GameState.NO_GAME
-        self.text_channel: discord.TextChannel = None
-        self.pending_game_delay = 10
+        self.text_channel = discord.TextChannel
+        self.pending_game_delay = 10  # seconds
         self.do_sticky = False
         self.track_length = 30
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """Listen for incoming messages."""
+    async def handle_message(self, message: discord.Message) -> None:
+        """Handle an incoming message."""
         if message.author == self.bot.user:
             return
         if not self.text_channel or message.channel.id != self.text_channel.id:
             return
         self.do_sticky = True
 
-    @app_commands.command(name="horse_race", description="Enter a horse race")
-    async def horse_race(self, interaction: discord.Interaction, bet: int, horse: int):
-        """Slash command for beginning or joining a blackjack game."""
-        # Validate bet
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
-            return
-
-        # Validate horse
-        if not (1 <= horse <= 6):
-            await interaction.response.send_message(
-                f"{horse} is not a valid horse number. You can bet on horses 1 - 6.",
-                ephemeral=True,
-            )
-            return
-
+    async def handle_interaction(
+        self, interaction: discord.Interaction, bet: int, horse: int
+    ) -> None:
+        """Handle slash command for this guild."""
         # Get command caller
         user = interaction.user
 
@@ -193,10 +172,8 @@ class HorseRacing(commands.Cog):
         for player in losing_players:
             await self.economy.withdraw(player.user, player.bet)
 
-        # Reset game state
-        self.game_state = GameState.NO_GAME
-        self.players = set()
-        self.text_channel = None
+        # Cleanup session
+        self.cleanup_function()
 
     async def do_race(self, horses: list[Horse]) -> Horse:
         """Run the race & return winning Horse."""
@@ -263,3 +240,78 @@ class HorseRacing(commands.Cog):
         ret += "=" * (self.track_length + 6)
 
         return ret.strip()
+
+
+class HorseRacingCog(commands.Cog):
+    """A cog that implements horse racing functionality"""
+
+    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+        self.bot = bot
+        self.economy = economy_cog
+        self.players = set()
+        self.game_state = GameState.NO_GAME
+        self.text_channel: discord.TextChannel = None
+        self.pending_game_delay = 10
+        self.do_sticky = False
+        self.track_length = 30
+
+        self.guild_sessions = {}
+        self.session_lock = threading.Lock()
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Listen for when cog is ready."""
+        print(f"{__name__} is online!")
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Listen for incoming messages."""
+        if message.author == self.bot.user:
+            return
+        if not self.text_channel or message.channel.id != self.text_channel.id:
+            return
+        self.do_sticky = True
+
+    @app_commands.command(name="horse_race", description="Enter a horse race")
+    async def horse_race(self, interaction: discord.Interaction, bet: int, horse: int):
+        """Slash command for beginning or joining a blackjack game."""
+        # Validate bet
+        if bet < 0:
+            await interaction.response.send_message(
+                "Bets must be at least 0 gold.", ephemeral=True
+            )
+            return
+        has_funds = await self.economy.validate_funds(interaction.user, bet)
+        if not has_funds:
+            await interaction.response.send_message(
+                "You do not have enough funds to make that bet!", ephemeral=True
+            )
+            return
+
+        # Validate horse
+        if not (1 <= horse <= 6):
+            await interaction.response.send_message(
+                f"{horse} is not a valid horse number. You can bet on horses 1 - 6.",
+                ephemeral=True,
+            )
+            return
+
+        # Get the guild session to handle command
+        guild = interaction.guild
+        with self.session_lock:
+            if guild.id not in self.guild_sessions:
+                self.guild_sessions[guild.id] = HorseRacingSession(
+                    guild, self.economy, self.get_cleanup_function(guild.id)
+                )
+
+        # Pass interaction to guild session
+        await self.guild_sessions[guild.id].handle_interaction(interaction, bet, horse)
+
+    def get_cleanup_function(self, guild_id: int) -> Callable:
+        """Generate a function for cleaning up a guild session."""
+
+        def cleanup_function():
+            with self.session_lock:
+                del self.guild_sessions[guild_id]
+
+        return cleanup_function

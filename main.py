@@ -13,7 +13,7 @@ import dotenv
 from cogs.casino.blackjack_cog import Blackjack
 from cogs.casino.dice_cog import Dice
 from cogs.economy_cog import Economy
-from cogs.casino.horse_racing_cog import HorseRacing
+from cogs.casino.horse_racing_cog import HorseRacingCog
 from cogs.income_cog import Income
 
 
@@ -58,7 +58,7 @@ async def main():
         economy_cog = Economy(client, data_path=os.getenv("DATA_PATH"))
         blackjack_cog = Blackjack(client, economy_cog=economy_cog)
         dice_cog = Dice(client, economy_cog=economy_cog)
-        horse_cog = HorseRacing(client, economy_cog=economy_cog)
+        horse_cog = HorseRacingCog(client, economy_cog=economy_cog)
         income_cog = Income(client, economy_cog=economy_cog)
 
         # Initialize client

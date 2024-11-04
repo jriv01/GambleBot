@@ -4,6 +4,8 @@ Cog that implements blackjack.
 
 import asyncio
 from enum import Enum
+from typing import Callable
+import threading
 
 import discord
 from discord import app_commands
@@ -35,10 +37,21 @@ class Player:
         return self.user.mention
 
 
-class Blackjack(commands.Cog):
-    """A cog that implements blackjack functionality"""
+class BlackjackSession:
+    """A guild session for blackjack."""
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+    def __init__(
+        self,
+        guild: discord.Guild,
+        bot: commands.Bot,
+        economy: Economy,
+        cleanup_function: Callable,
+    ):
+        self.guild = guild
+        self.bot = bot
+        self.economy = economy
+        self.cleanup_function = cleanup_function
+
         self.bot = bot
         self.game_state = GameState.NO_GAME
         self.table = set()  # Set of players in the game
@@ -47,30 +60,8 @@ class Blackjack(commands.Cog):
         self.pending_game_delay = 15  # seconds
         self.message_delay = 3  # seconds, add artificial delay between messages
 
-        self.economy = economy_cog
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
-
-    @app_commands.command(
-        name="blackjack", description="Start or join a game of Blackjack!"
-    )
-    async def blackjack(self, interaction: discord.Interaction, bet: int):
-        """Slash command for beginning or joining a blackjack game."""
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
-            return
-
+    async def handle_interaction(self, interaction: discord.Interaction, bet: int):
+        """Handle slash command for this guild."""
         # Get command caller
         user = interaction.user
 
@@ -184,10 +175,8 @@ class Blackjack(commands.Cog):
         for player in losers:
             await self.economy.withdraw(player.user, player.bet)
 
-        # Reset game state
-        self.game_state = GameState.NO_GAME
-        self.table = set()
-        self.text_channel = None
+        # Cleanup session
+        self.cleanup_function()
 
     async def player_turn(self, player: Player, deck: Deck, dealer_card: Card) -> None:
         """Go through a players turn of blackjack."""
@@ -319,17 +308,74 @@ class Blackjack(commands.Cog):
 
     def get_hand_value(self, hand: list[Card]) -> int:
         """Get integer value of a blackjack hand."""
+        # Get number of aces & all non-ace cards
         num_aces = len([card for card in hand if card.face == "Ace"])
         non_aces = [card for card in hand if card.face != "Ace"]
+
+        # Get total of non-ace cards
         total = 0
         for card in non_aces:
             total += card.get_value()
 
+        # Try to find largest possible value that's less than 22
         ace_total = 0
         if num_aces > 0:
+            # Iterate through all combinations of high and low aces
             for i in range(num_aces + 1):
                 ace_total = 11 * (num_aces - i) + 1 * i
                 if total + ace_total < 22:
                     break
 
         return total + ace_total
+
+
+class Blackjack(commands.Cog):
+    """A cog that implements blackjack functionality"""
+
+    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+        self.bot = bot
+        self.economy = economy_cog
+        self.guild_sessions = {}
+        self.session_lock = threading.Lock()
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Listen for when cog is ready."""
+        print(f"{__name__} is online!")
+
+    @app_commands.command(
+        name="blackjack", description="Start or join a game of Blackjack!"
+    )
+    async def blackjack(self, interaction: discord.Interaction, bet: int):
+        """Slash command for beginning or joining a blackjack game."""
+        # Validate bet
+        if bet < 0:
+            await interaction.response.send_message(
+                "Bets must be at least 0 gold.", ephemeral=True
+            )
+            return
+        has_funds = await self.economy.validate_funds(interaction.user, bet)
+        if not has_funds:
+            await interaction.response.send_message(
+                "You do not have enough funds to make that bet!", ephemeral=True
+            )
+            return
+
+        # Get the guild session to handle command
+        guild = interaction.guild
+        with self.session_lock:
+            if guild.id not in self.guild_sessions:
+                self.guild_sessions[guild.id] = BlackjackSession(
+                    guild, self.bot, self.economy, self.get_cleanup_function(guild.id)
+                )
+
+        # Pass interaction to guild session
+        await self.guild_sessions[guild.id].handle_interaction(interaction, bet)
+        
+    def get_cleanup_function(self, guild_id: int) -> Callable:
+        """Generate a function for cleaning up a guild session."""
+        def cleanup_function():
+            with self.session_lock:
+                del self.guild_sessions[guild_id]
+
+        return cleanup_function
