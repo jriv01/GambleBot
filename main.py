@@ -10,10 +10,10 @@ import discord
 from discord.ext import commands, tasks
 import dotenv
 
-from cogs.blackjack_cog import Blackjack
-from cogs.dice_cog import Dice
+from cogs.casino.blackjack_cog import Blackjack
+from cogs.casino.dice_cog import Dice
 from cogs.economy_cog import Economy
-from cogs.horse_racing_cog import HorseRacing
+from cogs.casino.horse_racing_cog import HorseRacing
 
 
 dotenv.load_dotenv()

@@ -208,7 +208,7 @@ class HorseRacing(commands.Cog):
         while not winning_horse:
             # Pick a random horse to advance by a random amount, [1,3]
             horse = random.choice(horses)
-            horse.advance(random.randint(1, 3))
+            horse.advance(random.randint(2, 4))
 
             # Check if the chosen horse has won
             if horse.finished():

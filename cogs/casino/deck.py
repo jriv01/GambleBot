@@ -22,6 +22,7 @@ class Card:
     def __init__(self, suit, face):
         self.suit = suit
         self.face = face
+        self.emoji = f":{suit.lower()}:"
 
     def get_value(self, high_aces=True) -> int:
         if self.face == "Ace":

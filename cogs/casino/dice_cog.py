@@ -46,11 +46,11 @@ class Dice(commands.Cog):
         dice_roll = random.randint(1, 6)
         if dice_roll >= 4:
             await interaction.response.send_message(
-                f"You rolled a {dice_roll} and won {bet}!"
+                f"{user.mention} rolled a {dice_roll} and won {bet}!"
             )
             await self.economy.deposit(user, bet)
         else:
             await interaction.response.send_message(
-                f"You rolled a {dice_roll} and lost {bet}!"
+                f"{user.mention} rolled a {dice_roll} and lost {bet}!"
             )
             await self.economy.withdraw(user, bet)
