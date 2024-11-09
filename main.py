@@ -15,13 +15,14 @@ from cogs.casino.dice_cog import Dice
 from cogs.economy_cog import Economy
 from cogs.casino.horse_racing_cog import HorseRacingCog
 from cogs.income_cog import Income
+from cogs.pokemon.pokemon_cog import PokemonCog
 
 
 dotenv.load_dotenv()
 
 GUILD_ID = discord.Object(id=os.getenv("GUILD_ID"))
 
-possible_status = cycle(["Florjon", "Carlos", "Kimberly"])
+possible_status = cycle(["Poker", "Blackjack", "Roulette"])
 
 
 class Client(commands.Bot):
@@ -32,12 +33,6 @@ class Client(commands.Bot):
         print(f"Logged on as {self.user}!")
 
         self.change_bot_status.start()
-
-        try:
-            synced_commands = await self.tree.sync(guild=GUILD_ID)
-            print(f"Synced {len(synced_commands)} commands")
-        except Exception as e:
-            print("Error with syncing commands has occurred:\n", e)
 
     @tasks.loop(seconds=260)
     async def change_bot_status(self):
@@ -51,22 +46,34 @@ intents.message_content = True
 # Command prefix must still be included, even though they are "deprecated"
 client = Client(command_prefix="h!", intents=intents)
 
+@client.command()
+async def sync(ctx: commands.Context):
+    try:
+        synced_commands = await client.tree.sync()
+        res = f"Synced {len(synced_commands)} commands."
+    except Exception as e:
+        res = f"Error with syncing commands has occurred:\n {e}"
+    print(res)
+    await ctx.message.reply(content=res)
+
 
 async def main():
     async with client:
         # Initialize cogs
-        economy_cog = Economy(client, data_path=os.getenv("DATA_PATH"))
+        economy_cog = Economy(client, database=os.getenv("DATA_PATH"))
         blackjack_cog = Blackjack(client, economy_cog=economy_cog)
         dice_cog = Dice(client, economy_cog=economy_cog)
         horse_cog = HorseRacingCog(client, economy_cog=economy_cog)
         income_cog = Income(client, economy_cog=economy_cog)
+        pokemon_cog = PokemonCog(client, os.getenv("DATA_PATH"))
 
         # Initialize client
-        await client.add_cog(economy_cog, guild=GUILD_ID)
-        await client.add_cog(blackjack_cog, guild=GUILD_ID)
-        await client.add_cog(dice_cog, guild=GUILD_ID)
-        await client.add_cog(horse_cog, guild=GUILD_ID)
-        await client.add_cog(income_cog, guild=GUILD_ID)
+        await client.add_cog(economy_cog)
+        await client.add_cog(blackjack_cog)
+        await client.add_cog(dice_cog)
+        await client.add_cog(horse_cog)
+        await client.add_cog(income_cog)
+        await client.add_cog(pokemon_cog)
         await client.start(token=os.getenv("DISCORD_TOKEN"))
 
 
