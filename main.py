@@ -12,17 +12,10 @@ import dotenv
 
 from cogs.casino.blackjack_cog import Blackjack
 from cogs.casino.dice_cog import Dice
-from cogs.economy_cog import Economy
 from cogs.casino.horse_racing_cog import HorseRacingCog
+from cogs.economy_cog import Economy
 from cogs.income_cog import Income
 from cogs.pokemon.pokemon_cog import PokemonCog
-
-
-dotenv.load_dotenv()
-
-GUILD_ID = discord.Object(id=os.getenv("GUILD_ID"))
-
-possible_status = cycle(["Poker", "Blackjack", "Roulette"])
 
 
 class Client(commands.Bot):
@@ -40,24 +33,31 @@ class Client(commands.Bot):
         await self.change_presence(activity=discord.Game(next(possible_status)))
 
 
+dotenv.load_dotenv()
+possible_status = cycle(["Poker", "Blackjack", "Roulette"])
+
+# Create client
+# Command prefix must still be included, even though they are "deprecated"
 intents = discord.Intents.default()
 intents.message_content = True
-
-# Command prefix must still be included, even though they are "deprecated"
 client = Client(command_prefix="h!", intents=intents)
 
+
 @client.command()
+@commands.is_owner()
 async def sync(ctx: commands.Context):
+    """Command to globally sync commands."""
     try:
         synced_commands = await client.tree.sync()
         res = f"Synced {len(synced_commands)} commands."
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         res = f"Error with syncing commands has occurred:\n {e}"
     print(res)
     await ctx.message.reply(content=res)
 
 
 async def main():
+    """Main function."""
     async with client:
         # Initialize cogs
         economy_cog = Economy(client, database=os.getenv("DATA_PATH"))

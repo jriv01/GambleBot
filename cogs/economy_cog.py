@@ -2,22 +2,21 @@
 Cog that implements an economy.
 """
 
-import os
 import sqlite3
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+DEFAULT_BALANCE = 1500
+
 
 class Economy(commands.Cog):
     """A cog that implements economy functionality"""
 
-    def __init__(self, bot: commands.Bot, data_path=None):
+    def __init__(self, bot: commands.Bot, database: str):
         self.bot = bot
-        self.database = os.path.join(data_path, "economy.db")
-
-        self.DEFAULT_BALANCE = 1500
+        self.database = database
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -32,18 +31,39 @@ class Economy(commands.Cog):
         await interaction.response.send_message(f"You have {funds} gold.")
 
     @app_commands.command(name="pay", description="Send money to another user.")
-    async def pay(self, interaction: discord.Interaction, member: discord.User, value: int):
+    async def pay(
+        self, interaction: discord.Interaction, member: discord.User, value: int
+    ):
         """Command to transfer funds from one user to another."""
+        # Check if the user is sending money to themselves
+        if interaction.user.id == member.id:
+            await interaction.response.send_message(
+                "Trying to send money to yourself, are you? Attempted fraud,"
+                " perhaps..?"
+            )
+            return
+
+        # Check if value being sent is non-negative
+        if value < 0:
+            await interaction.response.send_message(
+                "Transactions must be non-negative.", ephemeral=True
+            )
+            return
+
         # Check if player has enough funds to make payment
         has_funds = await self.validate_funds(interaction.user, value)
         if not has_funds:
-            await interaction.response.send_message("You do not have enough funds for that!")
+            await interaction.response.send_message(
+                "You do not have enough funds for that!", ephemeral=True
+            )
             return
-        
+
         # Transfer money
         await self.withdraw(interaction.user, value)
         await self.deposit(member, value)
-        await interaction.response.send_message(f"{interaction.user.mention} sent {member.mention} {value} gold.")
+        await interaction.response.send_message(
+            f"{interaction.user.mention} sent {member.mention} {value} gold."
+        )
 
     async def validate_funds(self, user: discord.User, value: int) -> bool:
         """Check if user has enough funds."""
@@ -85,7 +105,8 @@ class Economy(commands.Cog):
 
         # Set user funds
         cursor.execute(
-            "UPDATE Bank SET balance = ? WHERE user_id = ?", (new_funds, user.id)
+            "UPDATE `Economy.UserBank` SET balance = ? WHERE user_id = ?",
+            (new_funds, user.id),
         )
         connection.commit()
         connection.close()
@@ -97,16 +118,20 @@ class Economy(commands.Cog):
         cursor = connection.cursor()
 
         # Get user funds
-        cursor.execute("SELECT balance FROM Bank WHERE user_id = ?", (user.id,))
+        cursor.execute(
+            "SELECT balance FROM `Economy.UserBank` WHERE user_id = ?",
+            (user.id,),
+        )
         result = cursor.fetchone()
 
         # Insert user is they don't already exist
         if result is None:
             cursor.execute(
-                "INSERT INTO Bank (user_id, user_name, balance) VALUES (?,?,?)",
-                (user.id, user.name, self.DEFAULT_BALANCE),
+                "INSERT INTO `Economy.UserBank` (user_id, user_name, balance)"
+                " VALUES (?,?,?)",
+                (user.id, user.name, DEFAULT_BALANCE),
             )
-            balance = self.DEFAULT_BALANCE
+            balance = DEFAULT_BALANCE
         else:
             balance = result[0]
 

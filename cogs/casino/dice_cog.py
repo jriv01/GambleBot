@@ -29,28 +29,31 @@ class Dice(commands.Cog):
     async def dice(self, interaction: discord.Interaction, bet: int):
         """Slash command for beginning or joining a blackjack game."""
         # Validate bet
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
-            return
+        try:
+            if bet < 0:
+                await interaction.response.send_message(
+                    "Bets must be at least 0 gold.", ephemeral=True
+                )
+                return
+            has_funds = await self.economy.validate_funds(interaction.user, bet)
+            if not has_funds:
+                await interaction.response.send_message(
+                    "You do not have enough funds to make that bet!", ephemeral=True
+                )
+                return
 
-        user = interaction.user
+            user = interaction.user
 
-        dice_roll = random.randint(1, 6)
-        if dice_roll >= 4:
-            await interaction.response.send_message(
-                f"{user.mention} rolled a {dice_roll} and won {bet}!"
-            )
-            await self.economy.deposit(user, bet)
-        else:
-            await interaction.response.send_message(
-                f"{user.mention} rolled a {dice_roll} and lost {bet}!"
-            )
-            await self.economy.withdraw(user, bet)
+            dice_roll = random.randint(1, 6)
+            if dice_roll >= 4:
+                await interaction.response.send_message(
+                    f"{user.mention} rolled a {dice_roll} and won {bet}!"
+                )
+                await self.economy.deposit(user, bet)
+            else:
+                await interaction.response.send_message(
+                    f"{user.mention} rolled a {dice_roll} and lost {bet}!"
+                )
+                await self.economy.withdraw(user, bet)
+        except Exception as e:
+            print(e)

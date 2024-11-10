@@ -1,7 +1,19 @@
+"""Casino library."""
+
+import enum
 import random
 
+
+class GameState(enum.Enum):
+    """Represents the state of a casino game."""
+
+    NO_GAME = 0
+    GAME_PENDING = 1
+    GAME_STARTED = 2
+
+
 class Card:
-    ALL_FACES = [
+    ALL_RANKS = [
         "Ace",
         "2",
         "3",
@@ -19,23 +31,23 @@ class Card:
 
     ALL_SUITS = ["Clubs", "Diamonds", "Hearts", "Spades"]
 
-    def __init__(self, suit, face):
+    def __init__(self, suit, rank):
         self.suit = suit
-        self.face = face
+        self.rank = rank
         self.emoji = f":{suit.lower()}:"
 
     def get_value(self, high_aces=True) -> int:
-        if self.face == "Ace":
+        if self.rank == "Ace":
             return 11 if high_aces else 1
-        elif not self.face.isdigit():
+        elif not self.rank.isdigit():
             return 10
-        return int(self.face)
+        return int(self.rank)
 
     def __repr__(self):
-        return f"{self.face} of {self.suit}"
+        return f"{self.rank} of {self.suit}"
 
     def __str__(self):
-        return f"{self.face} of {self.suit}"
+        return f"{self.rank} of {self.suit}"
 
 
 class Deck:
@@ -44,11 +56,11 @@ class Deck:
         self.cards = []
         for _ in range(num_decks):
             for suit in Card.ALL_SUITS:
-                for face in Card.ALL_FACES:
-                    self.cards.append(Card(suit, face))
+                for rank in Card.ALL_RANKS:
+                    self.cards.append(Card(suit, rank))
 
     def shuffle(self) -> None:
         random.shuffle(self.cards)
 
     def draw_card(self) -> Card:
-        return self.cards.pop(0)
+        return self.cards.pop()
