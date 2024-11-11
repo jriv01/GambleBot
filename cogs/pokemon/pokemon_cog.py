@@ -2,14 +2,16 @@
 Cog that implements pokemon functionality.
 """
 
+import asyncio
 import random
 import sqlite3
-import time
 import threading
-from typing import Callable
 
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
+
+from cogs.paginator import Paginator
 
 NUM_POKEMON = 1025
 
@@ -17,23 +19,14 @@ NUM_POKEMON = 1025
 class WildPokemon:
     """A Pokemon that is available for capture."""
 
-    def __init__(
-        self, pokedex_number: str, pokemon_name: str, cleanup_function: Callable
-    ):
+    def __init__(self, pokedex_number: str, pokemon_name: str):
         # Set attributes
         self.pokedex_number = pokedex_number
         self.pokemon_name = pokemon_name
-        self.cleanup_function = cleanup_function
 
-        # Time this Pokemon will be available for capture
-        self.available_time = 10  # Minutes
-
+        # Variables for determining if Pokemon can be caught
         self.caught_lock = threading.Lock()
-        self.caught = False
-
-        # Cleanup this instance after timeout
-        t = threading.Thread(target=self.expire, daemon=True)
-        t.start()
+        self.is_caught = False
 
     async def handle_message(
         self, message: discord.Message, database: str
@@ -48,6 +41,12 @@ class WildPokemon:
         content = " ".join(message.content.strip().lower().split())
         if content != f"catch {self.pokemon_name}".lower():
             return
+
+        # Check if this pokemon has already been caught
+        with self.caught_lock:
+            if self.is_caught:
+                return
+            self.is_caught = True
 
         # Connect to database & check if this pokemon is owned already
         connection = sqlite3.connect(database)
@@ -85,26 +84,31 @@ class WildPokemon:
         connection.close()
 
         # Send message & cleanup
-        await message.channel.send(
+        await message.reply(
             content=(
                 f"{message.author.mention} caught"
                 f" {self.pokemon_name} (#{self.pokedex_number})!"
             )
         )
-        with self.caught_lock:
-            self.caught = True  # Tell timeout thread to not cleanup
 
-        self.cleanup_function()
 
-    def expire(self):
-        """Timeout after amount of time"""
-        # Sleep for timeout duration
-        time.sleep(self.available_time * 60)
+class Pokedex(Paginator):
+    """View for a player Pokedex"""
 
-        # Cleanup if this pokemon was not caught already
-        with self.caught_lock:
-            if not self.caught:
-                self.cleanup_function()
+    def __init__(self, user: discord.User, message, pokemon_list):
+        super().__init__(
+            message=message,
+            page_title="Pokédex",
+            data=pokemon_list,
+            data_formatter=self.format_pokemon,
+            thumbnail_url=user.avatar.url,
+            items_per_page=10,
+        )
+
+    def format_pokemon(self, pokemon: tuple[str, str]):
+        """Format pokemon data into a string"""
+        dex_number, name = pokemon
+        return f"#{dex_number}: {name}"
 
 
 class PokemonCog(commands.Cog):
@@ -113,7 +117,12 @@ class PokemonCog(commands.Cog):
     def __init__(self, bot: commands.Bot, database: str):
         self.bot = bot
         self.database = database
-        self.wild_pokemon = {}  # Mapping from guild to available pokemon
+
+        # Mapping from guild to available pokemon
+        self.wild_pokemon: dict[int, WildPokemon] = {}
+
+        # Amount of time wild pokemon are available for
+        self.capture_timeout = 10  # Minutes
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -143,7 +152,7 @@ class PokemonCog(commands.Cog):
         connection = sqlite3.connect(self.database)
         cursor = connection.cursor()
         cursor.execute(
-            "INSERT INTO `Pokemon.GuildRegistrations` (guild_id, channel_id)"
+            "INSERT INTO `Pokemon.GuildConfigurations` (guild_id, channel_id)"
             " VALUES (?,?)",
             (guild.id, None),
         )
@@ -157,11 +166,47 @@ class PokemonCog(commands.Cog):
         connection = sqlite3.connect(self.database)
         cursor = connection.cursor()
         cursor.execute(
-            "DELETE FROM `Pokemon.GuildRegistrations` WHERE guild_id = ?",
+            "DELETE FROM `Pokemon.GuildConfigurations` WHERE guild_id = ?",
             (guild.id,),
         )
         connection.commit()
         connection.close()
+
+        # Remove wild pokemon from that guild, if it exists
+        self.wild_pokemon.pop(guild.id, None)
+
+    @app_commands.command(
+        name="pokedex", description="See what Pokémon you've captured."
+    )
+    async def pokedex(self, interaction: discord.Interaction):
+        """Get all pokemon that a user has captured."""
+        # Fetch a user's collection of captured pokemon
+        connection = sqlite3.connect(self.database)
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT pokedex_number, pokemon_name FROM `Pokemon.UserCollections`"
+            " WHERE user_id = ? ORDER BY pokedex_number",
+            (interaction.user.id,),
+        )
+        rows = cursor.fetchall()
+        connection.commit()
+        connection.close()
+
+        # Check if the user has any pokemon
+        if not rows:
+            await interaction.response.send_message(
+                "You haven't caught any Pokémon!", ephemeral=True
+            )
+            return
+
+        # Build pokedex & display
+        await interaction.response.send_message(
+            embed=discord.Embed(title="Pokédex")
+        )
+        view = Pokedex(
+            interaction.user, await interaction.original_response(), rows
+        )
+        await view.update_message()
 
     @tasks.loop(seconds=60)
     async def spawn_pokemon(self):
@@ -180,22 +225,35 @@ class PokemonCog(commands.Cog):
         )
         embed.set_image(url=icon_url)
 
-        # Get all registered guilds
-        registerations = self.get_registered_guilds()
-        for registeration in registerations:
-            # Check if the guild is configured
-            guild_id, channel_id = registeration
-            if channel_id:
-                # Create capturable pokemon
-                self.wild_pokemon[guild_id] = WildPokemon(
-                    dex_number,
-                    pokemon_name,
-                    self.get_cleanup_function(guild_id),
-                )
+        # Get all configured guilds
+        configured_guilds = self.get_configured_guilds()
+        for guild_id, channel_id in configured_guilds.items():
+            # Create capturable pokemon
+            self.wild_pokemon[guild_id] = WildPokemon(
+                dex_number,
+                pokemon_name,
+            )
 
-                # Send spawn message
-                await channel.send(embed=embed)
-                channel: discord.TextChannel = self.bot.get_channel(channel_id)
+            # Send spawn message
+            channel: discord.TextChannel = self.bot.get_channel(channel_id)
+            await channel.send(embed=embed)
+
+        # Allow time for pokemon to be caught
+        await asyncio.sleep(60 * self.capture_timeout)
+
+        for guild_id, pokemon in self.wild_pokemon.items():
+            # If the pokemon was caught, do nothing
+            if pokemon.is_caught:
+                continue
+
+            # Send message saying pokemon got away
+            channel: discord.TextChannel = self.bot.get_channel(
+                configured_guilds[guild_id]
+            )
+            await channel.send(content=f"{pokemon.pokemon_name} got away...")
+
+        # Reset wild pokemon
+        self.wild_pokemon: dict[int, WildPokemon] = {}
 
         # Spawn the next pokemon at a random interval
         self.spawn_pokemon.change_interval(
@@ -203,7 +261,55 @@ class PokemonCog(commands.Cog):
         )
 
     @commands.command()
-    async def pokemon_register(self, ctx: commands.Context):
+    @commands.is_owner()
+    async def force_spawn(self, ctx: commands.Context):
+        """Force a pokemon to spawn.
+
+        WARNING: Aborts any existing pokemon.
+        """
+
+        # Check if this guild already has a wild pokemon available.
+        if ctx.guild.id in self.wild_pokemon:
+            ctx.message.reply(
+                content=(
+                    "Forced spawn aborted a wild pokemon:"
+                    f" {self.wild_pokemon[ctx.guild.id].pokemon_name}"
+                )
+            )
+
+        # Get a random pokemon
+        dex_number, pokemon_name, icon_url = self.get_random_pokemon()
+
+        # Build a Pokemon embed
+        embed = discord.Embed(
+            title=f"A wild {pokemon_name} (#{dex_number}) has appeared!"
+        )
+        embed.add_field(
+            name=f'Type "CATCH {pokemon_name}" to catch it!',
+            value="",
+            inline=False,
+        )
+        embed.set_image(url=icon_url)
+        await ctx.channel.send(embed=embed)
+
+        # Create pokemon
+        pokemon = WildPokemon(dex_number, pokemon_name)
+        self.wild_pokemon[ctx.guild.id] = pokemon
+
+        # Allow time for pokemon to be caught
+        await asyncio.sleep(60 * self.capture_timeout)
+
+        # Check if the pokemon was caught
+        if not pokemon.is_caught:
+            await ctx.channel.send(
+                content=f"{pokemon.pokemon_name} got away..."
+            )
+
+        # Remove pokemon from memory
+        self.wild_pokemon.pop(ctx.guild.id, None)
+
+    @commands.command()
+    async def pokemon_enable(self, ctx: commands.Context):
         """Configure the spawn channel for a guild."""
         guild = ctx.guild
         channel = ctx.channel
@@ -212,12 +318,39 @@ class PokemonCog(commands.Cog):
         connection = sqlite3.connect(self.database)
         cursor = connection.cursor()
         cursor.execute(
-            "UPDATE `Pokemon.GuildRegistrations` SET channel_id = ? WHERE"
+            "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
             " guild_id = ?",
             (channel.id, guild.id),
         )
         connection.commit()
         connection.close()
+
+        await ctx.message.reply(
+            "Configured random pokemon spawns for this server to this channel."
+        )
+
+    @commands.command()
+    async def pokemon_disable(self, ctx: commands.Context):
+        """Unconfigure the spawn channel for a guild."""
+        guild = ctx.guild
+
+        # Unset spawn channel for this guild
+        connection = sqlite3.connect(self.database)
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
+            " guild_id = ?",
+            (None, guild.id),
+        )
+        connection.commit()
+        connection.close()
+
+        # Remove wild pokemon from that guild, if it exists
+        self.wild_pokemon.pop(guild.id, None)
+
+        await ctx.message.reply(
+            "Unconfigured random pokemon spawns for this server."
+        )
 
     def get_random_pokemon(self) -> tuple[str, str, str]:
         """Get a random pokemon's information."""
@@ -238,19 +371,14 @@ class PokemonCog(commands.Cog):
 
         return dex_number, pokemon_name, icon_url
 
-    def get_registered_guilds(self) -> list[int]:
-        """Get all registered guilds."""
+    def get_configured_guilds(self) -> dict[int, int]:
+        """Get all configured guilds."""
         connection = sqlite3.connect(self.database)
         cursor = connection.cursor()
-        cursor.execute("SELECT * FROM `Pokemon.GuildRegistrations`")
+        cursor.execute(
+            "SELECT * FROM `Pokemon.GuildConfigurations` WHERE channel_id IS"
+            " NOT NULL"
+        )
         rows = cursor.fetchall()
         connection.close()
-        return rows
-
-    def get_cleanup_function(self, guild_id: int) -> Callable:
-        """Generate a function to cleanup existing wild pokemon when timed out or captured."""
-
-        def cleanup_function():
-            del self.wild_pokemon[guild_id]
-
-        return cleanup_function
+        return {row[0]: row[1] for row in rows}
