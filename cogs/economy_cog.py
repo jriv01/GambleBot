@@ -2,11 +2,11 @@
 Cog that implements an economy.
 """
 
-import sqlite3
-
 import discord
 from discord import app_commands
 from discord.ext import commands
+
+from common.database_utilities import SqliteDatabase
 
 DEFAULT_BALANCE = 1500
 
@@ -14,9 +14,9 @@ DEFAULT_BALANCE = 1500
 class Economy(commands.Cog):
     """A cog that implements economy functionality"""
 
-    def __init__(self, bot: commands.Bot, database: str):
+    def __init__(self, bot: commands.Bot, database_directory: str):
         self.bot = bot
-        self.database = database
+        self.database = SqliteDatabase(database_directory)
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -99,43 +99,32 @@ class Economy(commands.Cog):
         current_funds = await self._fetch_funds(user)
         new_funds = current_funds + delta
 
-        # Make connection to database
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-
-        # Set user funds
-        cursor.execute(
+        # Update user funds
+        self.database.execute_query(
             "UPDATE `Economy.UserBank` SET balance = ? WHERE user_id = ?",
-            (new_funds, user.id),
+            new_funds,
+            user.id,
         )
-        connection.commit()
-        connection.close()
 
     async def _fetch_funds(self, user: discord.User) -> int:
         """Get a user's balance"""
-        # Make connection to database
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-
-        # Get user funds
-        cursor.execute(
+        # Get the user's funds
+        result = self.database.execute_query(
             "SELECT balance FROM `Economy.UserBank` WHERE user_id = ?",
-            (user.id,),
+            user.id,
         )
-        result = cursor.fetchone()
 
         # Insert user is they don't already exist
-        if result is None:
-            cursor.execute(
-                "INSERT INTO `Economy.UserBank` (user_id, user_name, balance)"
-                " VALUES (?,?,?)",
-                (user.id, user.name, DEFAULT_BALANCE),
+        if not result:
+            self.database.execute_query(
+                "INSERT INTO `Economy.UserBank` (user_id, user_name,"
+                " balance) VALUES (?,?,?)",
+                user.id,
+                user.name,
+                DEFAULT_BALANCE,
             )
             balance = DEFAULT_BALANCE
         else:
-            balance = result[0]
+            balance = result[0][0]
 
-        # Commit & close
-        connection.commit()
-        connection.close()
         return balance
