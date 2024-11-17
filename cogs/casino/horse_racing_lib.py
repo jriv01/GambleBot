@@ -57,7 +57,7 @@ class HorseRacingSession:
 
     def __init__(self, channel: discord.TextChannel):
         self.players = set()
-        self.game_state = GameState.NO_GAME
+        self.game_state = GameState.GAME_PENDING
         self.channel = channel
         self.do_sticky = False
         self.track_length = 30

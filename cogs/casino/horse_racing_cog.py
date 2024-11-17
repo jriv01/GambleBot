@@ -155,7 +155,7 @@ class HorseRacingCog(commands.Cog):
             )
         for player in losers:
             losing_text += (
-                f"{player.mention} won and cashed out {player.bet*2} gold!\n"
+                f"{player.mention} lost their bet of {player.bet} gold.\n"
             )
 
         # Build & send the game result embed
