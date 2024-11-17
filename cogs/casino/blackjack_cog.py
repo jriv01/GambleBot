@@ -58,11 +58,16 @@ class Blackjack(commands.Cog):
             # Check if session exists
             current_session = self.guild_sessions.get(guild.id, None)
             if not current_session:
-                # Create new session & send message
+                # Create new session
                 self.guild_sessions[guild.id] = BlackjackSession(
                     self.bot, interaction.channel
                 )
+
+                # Add player & pay bet
                 self.guild_sessions[guild.id].add_player(user, bet)
+                await self.economy.withdraw(user, bet)
+
+                # Send message
                 await interaction.response.send_message(
                     f"{user.mention} has opened a Blackjack session with a bet"
                     f" of {bet}!\n\nUse /blackjack to join!"
@@ -100,9 +105,9 @@ class Blackjack(commands.Cog):
 
         # Update balances based on results
         for player in winners:
+            await self.economy.deposit(player.user, player.bet * 2)
+        for player in ties:
             await self.economy.deposit(player.user, player.bet)
-        for player in losers:
-            await self.economy.withdraw(player.user, player.bet)
 
         # Destroy the session
         del self.guild_sessions[guild.id]
