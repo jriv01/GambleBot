@@ -4,14 +4,15 @@ Cog that implements pokemon functionality.
 
 import asyncio
 import random
-import sqlite3
 import threading
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from cogs.paginator import Paginator
+from common.database_utilities import SqliteDatabase
+from common.paginator import Paginator
+from cogs.pokemon.pokemon_api_wrapper import Pokemon, PokemonApiWrapper
 
 NUM_POKEMON = 1025
 
@@ -19,27 +20,31 @@ NUM_POKEMON = 1025
 class WildPokemon:
     """A Pokemon that is available for capture."""
 
-    def __init__(self, pokedex_number: str, pokemon_name: str):
+    def __init__(self, pokemon: Pokemon):
         # Set attributes
-        self.pokedex_number = pokedex_number
-        self.pokemon_name = pokemon_name
+        self.pokemon = pokemon
 
         # Variables for determining if Pokemon can be caught
         self.caught_lock = threading.Lock()
         self.is_caught = False
 
+    @property
+    def name(self):
+        """Get name of wild pokemon."""
+        return self.pokemon.name
+
     async def handle_message(
-        self, message: discord.Message, database: str
+        self, message: discord.Message, database: SqliteDatabase
     ) -> None:
         """Handle incoming message & check if pokemon is caught.
 
         Args:
             message: Discord message to parse
-            database: DB file to connect and interact with
+            database: Database to interact with
         """
         # Return if not caught
         content = " ".join(message.content.strip().lower().split())
-        if content != f"catch {self.pokemon_name}".lower():
+        if content != f"catch {self.pokemon.name}".lower():
             return
 
         # Check if this pokemon has already been caught
@@ -49,45 +54,41 @@ class WildPokemon:
             self.is_caught = True
 
         # Connect to database & check if this pokemon is owned already
-        connection = sqlite3.connect(database)
-        cursor = connection.cursor()
-        cursor.execute(
+        res = database.execute_query(
             "SELECT num_owned FROM `Pokemon.UserCollections` WHERE"
-            " pokemon_name = ?",
-            (self.pokemon_name,),
+            " pokemon_name = ? AND language = ?",
+            self.pokemon.name,
+            self.pokemon.language,
         )
-        res = cursor.fetchone()
 
         # Add entry if not owned
         if not res:
-            cursor.execute(
-                "INSERT INTO `Pokemon.UserCollections` "
-                "(user_id, user_name, pokemon_name, pokedex_number, num_owned) "
-                "VALUES (?,?,?,?,?)",
-                (
-                    message.author.id,
-                    message.author.name,
-                    self.pokemon_name,
-                    self.pokedex_number,
-                    1,
-                ),
+            database.execute_query(
+                "INSERT INTO `Pokemon.UserCollections` (user_id, user_name,"
+                " pokemon_name, language, pokedex_number, num_owned) VALUES"
+                " (?,?,?,?,?,?)",
+                message.author.id,
+                message.author.name,
+                self.pokemon.name,
+                self.pokemon.language,
+                self.pokemon.pokedex_number,
+                1,
             )
         else:  # Update entry otherwise
-            cursor.execute(
-                "UPDATE `Pokemon.UserCollections` "
-                "SET num_owned = ? "
-                "WHERE user_id = ? AND pokemon_name = ?",
-                (res[0] + 1, message.author.id, self.pokemon_name),
+            database.execute_query(
+                "UPDATE `Pokemon.UserCollections` SET num_owned = ? WHERE"
+                " user_id = ? AND pokemon_name = ? AND language = ?",
+                res[0][0] + 1,  # Get first row
+                message.author.id,
+                self.pokemon.name,
+                self.pokemon.language,
             )
-
-        connection.commit()
-        connection.close()
 
         # Send message & cleanup
         await message.reply(
             content=(
                 f"{message.author.mention} caught"
-                f" {self.pokemon_name} (#{self.pokedex_number})!"
+                f" {self.pokemon.name} (#{self.pokemon.pokedex_number})!"
             )
         )
 
@@ -114,9 +115,12 @@ class Pokedex(Paginator):
 class PokemonCog(commands.Cog):
     """A cog that implements pokemon functionality"""
 
-    def __init__(self, bot: commands.Bot, database: str):
+    def __init__(self, bot: commands.Bot, database_directory: str):
         self.bot = bot
-        self.database = database
+        self.database = SqliteDatabase(database_directory)
+
+        # Pokemon API wrapper
+        self.poke_api = PokemonApiWrapper()
 
         # Mapping from guild to available pokemon
         self.wild_pokemon: dict[int, WildPokemon] = {}
@@ -149,28 +153,21 @@ class PokemonCog(commands.Cog):
     async def on_guild_join(self, guild: discord.Guild):
         """Action to take when a new guild is joined."""
         # Add empty channel registry to database
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
+        self.database.execute_query(
             "INSERT INTO `Pokemon.GuildConfigurations` (guild_id, channel_id)"
             " VALUES (?,?)",
-            (guild.id, None),
+            guild.id,
+            None,
         )
-        connection.commit()
-        connection.close()
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild):
         """Action to take when a guild is left."""
         # Remove guild's entry from database
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
+        self.database.execute_query(
             "DELETE FROM `Pokemon.GuildConfigurations` WHERE guild_id = ?",
-            (guild.id,),
+            guild.id,
         )
-        connection.commit()
-        connection.close()
 
         # Remove wild pokemon from that guild, if it exists
         self.wild_pokemon.pop(guild.id, None)
@@ -178,19 +175,20 @@ class PokemonCog(commands.Cog):
     @app_commands.command(
         name="pokedex", description="See what Pokémon you've captured."
     )
-    async def pokedex(self, interaction: discord.Interaction):
+    async def pokedex(
+        self, interaction: discord.Interaction, language: str = "en"
+    ):
         """Get all pokemon that a user has captured."""
+        # Ensure language is of expected format
+        language = language.lower()[:2]
+
         # Fetch a user's collection of captured pokemon
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
+        rows = self.database.execute_query(
             "SELECT pokedex_number, pokemon_name FROM `Pokemon.UserCollections`"
-            " WHERE user_id = ? ORDER BY pokedex_number",
-            (interaction.user.id,),
+            " WHERE user_id = ? AND language = ? ORDER BY pokedex_number",
+            interaction.user.id,
+            language,
         )
-        rows = cursor.fetchall()
-        connection.commit()
-        connection.close()
 
         # Check if the user has any pokemon
         if not rows:
@@ -212,27 +210,27 @@ class PokemonCog(commands.Cog):
     async def spawn_pokemon(self):
         """Periodically spawn a pokemon in all registered guilds."""
         # Get a random pokemon
-        dex_number, pokemon_name, icon_url = self.get_random_pokemon()
+        pokemon = await self.poke_api.get_random_pokemon()
+        pokemon_name = pokemon.name
+        pokedex_number = pokemon.pokedex_number
+        artwork_url = pokemon.artwork_url
 
         # Build a Pokemon embed
         embed = discord.Embed(
-            title=f"A wild {pokemon_name} (#{dex_number}) has appeared!"
+            title=f"A wild {pokemon_name} (#{pokedex_number}) has appeared!"
         )
         embed.add_field(
-            name=f'Type "CATCH {pokemon_name}" to catch it!',
+            name=f'Type "CATCH {pokemon.name}" to catch it!',
             value="",
             inline=False,
         )
-        embed.set_image(url=icon_url)
+        embed.set_image(url=artwork_url)
 
         # Get all configured guilds
         configured_guilds = self.get_configured_guilds()
         for guild_id, channel_id in configured_guilds.items():
             # Create capturable pokemon
-            self.wild_pokemon[guild_id] = WildPokemon(
-                dex_number,
-                pokemon_name,
-            )
+            self.wild_pokemon[guild_id] = WildPokemon(pokemon)
 
             # Send spawn message
             channel: discord.TextChannel = self.bot.get_channel(channel_id)
@@ -241,6 +239,7 @@ class PokemonCog(commands.Cog):
         # Allow time for pokemon to be caught
         await asyncio.sleep(60 * self.capture_timeout)
 
+        # Clean up wild pokemon for each guild
         for guild_id, pokemon in self.wild_pokemon.items():
             # If the pokemon was caught, do nothing
             if pokemon.is_caught:
@@ -267,7 +266,6 @@ class PokemonCog(commands.Cog):
 
         WARNING: Aborts any existing pokemon.
         """
-
         # Check if this guild already has a wild pokemon available.
         if ctx.guild.id in self.wild_pokemon:
             ctx.message.reply(
@@ -278,32 +276,33 @@ class PokemonCog(commands.Cog):
             )
 
         # Get a random pokemon
-        dex_number, pokemon_name, icon_url = self.get_random_pokemon()
+        pokemon = await self.poke_api.get_random_pokemon()
+        pokemon_name = pokemon.name
+        pokedex_number = pokemon.pokedex_number
+        artwork_url = pokemon.artwork_url
 
         # Build a Pokemon embed
         embed = discord.Embed(
-            title=f"A wild {pokemon_name} (#{dex_number}) has appeared!"
+            title=f"A wild {pokemon_name} (#{pokedex_number}) has appeared!"
         )
         embed.add_field(
             name=f'Type "CATCH {pokemon_name}" to catch it!',
             value="",
             inline=False,
         )
-        embed.set_image(url=icon_url)
+        embed.set_image(url=artwork_url)
         await ctx.channel.send(embed=embed)
 
         # Create pokemon
-        pokemon = WildPokemon(dex_number, pokemon_name)
-        self.wild_pokemon[ctx.guild.id] = pokemon
+        wild_pokemon = WildPokemon(pokemon)
+        self.wild_pokemon[ctx.guild.id] = wild_pokemon
 
         # Allow time for pokemon to be caught
         await asyncio.sleep(60 * self.capture_timeout)
 
         # Check if the pokemon was caught
-        if not pokemon.is_caught:
-            await ctx.channel.send(
-                content=f"{pokemon.pokemon_name} got away..."
-            )
+        if not wild_pokemon.is_caught:
+            await ctx.channel.send(content=f"{wild_pokemon.name} got away...")
 
         # Remove pokemon from memory
         self.wild_pokemon.pop(ctx.guild.id, None)
@@ -315,15 +314,12 @@ class PokemonCog(commands.Cog):
         channel = ctx.channel
 
         # Set the new spawn channel for this guild
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
-            "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
+        self.database.execute_query(
+            "UPDATE `Pokemon.GuileConfigurations` SET channel_id = ? WHERE"
             " guild_id = ?",
-            (channel.id, guild.id),
+            channel.id,
+            guild.id,
         )
-        connection.commit()
-        connection.close()
 
         await ctx.message.reply(
             "Configured random pokemon spawns for this server to this channel."
@@ -335,15 +331,12 @@ class PokemonCog(commands.Cog):
         guild = ctx.guild
 
         # Unset spawn channel for this guild
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
+        self.database.execute_query(
             "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
             " guild_id = ?",
-            (None, guild.id),
+            None,
+            guild.id,
         )
-        connection.commit()
-        connection.close()
 
         # Remove wild pokemon from that guild, if it exists
         self.wild_pokemon.pop(guild.id, None)
@@ -352,33 +345,10 @@ class PokemonCog(commands.Cog):
             "Unconfigured random pokemon spawns for this server."
         )
 
-    def get_random_pokemon(self) -> tuple[str, str, str]:
-        """Get a random pokemon's information."""
-        # Get a random 4 digit pokedex number
-        dex_number = str(random.randint(1, NUM_POKEMON)).zfill(4)
-
-        # Fetch random pokemon from database
-        # TODO - Is this really needed?
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
-            "SELECT pokemon_name, icon_url FROM `Pokemon.Pokedex` WHERE"
-            " pokedex_number = ?",
-            (dex_number,),
-        )
-        pokemon_name, icon_url = cursor.fetchone()
-        connection.close()
-
-        return dex_number, pokemon_name, icon_url
-
     def get_configured_guilds(self) -> dict[int, int]:
         """Get all configured guilds."""
-        connection = sqlite3.connect(self.database)
-        cursor = connection.cursor()
-        cursor.execute(
+        rows = self.database.execute_query(
             "SELECT * FROM `Pokemon.GuildConfigurations` WHERE channel_id IS"
             " NOT NULL"
         )
-        rows = cursor.fetchall()
-        connection.close()
         return {row[0]: row[1] for row in rows}
