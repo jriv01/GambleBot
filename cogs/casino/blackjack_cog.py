@@ -1,6 +1,4 @@
-"""
-Cog that implements blackjack.
-"""
+"""Cog that implements blackjack."""
 
 import asyncio
 import threading
@@ -9,20 +7,28 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.economy_cog import Economy
 from cogs.casino.blackjack_lib import BlackjackSession
 from cogs.casino.casino_lib import GameState
+from cogs.economy_cog import Economy
 
 
 class Blackjack(commands.Cog):
-    """A cog that implements blackjack functionality"""
+    """A cog that implements blackjack functionality.
+
+    Attributes:
+        bot: A discord bot client.
+        economy: A discord.commands.Cog instance that manages player funds.
+        pending_game_delay: Amount of time to wait before starting a game.
+        guild_sessions: Map of guild ids to horse racing sessions.
+        session_lock: Lock to acquire when handling sessions.
+    """
 
     def __init__(self, bot: commands.Bot, economy_cog: Economy):
         self.bot = bot
         self.economy = economy_cog
+        self.pending_game_delay = 15
         self.guild_sessions = {}
         self.session_lock = threading.Lock()
-        self.pending_game_delay = 15
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -32,8 +38,15 @@ class Blackjack(commands.Cog):
     @app_commands.command(
         name="blackjack", description="Start or join a game of Blackjack!"
     )
-    async def blackjack(self, interaction: discord.Interaction, bet: int):
-        """Slash command for beginning or joining a blackjack game."""
+    async def blackjack(
+        self, interaction: discord.Interaction, bet: int
+    ) -> None:
+        """Slash command for beginning or joining a blackjack game.
+
+        Args:
+            interaction: Discord interaction to handle.
+            bet: Amount user wishes to bet.
+        """
         # Validate bet
         # All bets must be non-negative & not greater than the users funds
         if bet < 0:
@@ -118,8 +131,15 @@ class Blackjack(commands.Cog):
         winners: list,
         losers: list,
         ties: list,
-    ):
-        """Display results of a blackjack session."""
+    ) -> None:
+        """Display results of a blackjack session.
+
+        Args:
+            channel: Discord channel to send message in.
+            winners: List of winning players.
+            losers: List of losing players.
+            ties: List of players who tied.
+        """
         # Generate text for each potential outcome
         winner_text = ""
         loser_text = ""

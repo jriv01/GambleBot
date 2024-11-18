@@ -1,6 +1,4 @@
-"""
-Cog that implements income via message counts.
-"""
+"""Cog that implements income via message counts."""
 
 from threading import Lock
 
@@ -11,7 +9,14 @@ from cogs.economy_cog import Economy
 
 
 class Income(commands.Cog):
-    """A cog that implements income functionality"""
+    """A cog that implements income functionality.
+
+    Attributes:
+        bot: Discord bot client.
+        economy: A discord.commands.Cog instance that manages player funds.
+        lock: Lock for managing message counts.
+        pending_counts: Number of messages to cash in for each user.
+    """
 
     def __init__(self, bot: commands.Bot, economy_cog: Economy):
         self.bot = bot
@@ -19,13 +24,12 @@ class Income(commands.Cog):
         self.lock = Lock()
         self.pending_counts = {}
 
-        # Task loop
-        self.direct_deposit.start()
-
     @commands.Cog.listener()
     async def on_ready(self):
         """Listen for when cog is ready."""
         print(f"{__name__} is online!")
+        # Task loop
+        self.direct_deposit.start()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -41,7 +45,7 @@ class Income(commands.Cog):
             self.pending_counts[user] += 1
 
     @tasks.loop(seconds=600)
-    async def direct_deposit(self):
+    async def direct_deposit(self) -> None:
         """Deposit into user funds every 10 minutes"""
         # Deposit according to number of user messages
         with self.lock:

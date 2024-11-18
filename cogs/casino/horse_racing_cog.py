@@ -1,6 +1,4 @@
-"""
-Cog that implements creation and management of horse racing sessions.
-"""
+"""Cog that implements creation and management of horse racing sessions."""
 
 import asyncio
 import threading
@@ -15,14 +13,20 @@ from cogs.economy_cog import Economy
 
 
 class HorseRacingCog(commands.Cog):
-    """A cog that implements horse racing functionality"""
+    """A cog that implements horse racing functionality.
+
+    Attributes:
+        bot: A discord bot client.
+        economy: A discord.commands.Cog instance that manages player funds.
+        pending_game_delay: Amount of time to wait before starting a game.
+        guild_sessions: Map of guild ids to horse racing sessions.
+        session_lock: Lock to acquire when handling sessions.
+    """
 
     def __init__(self, bot: commands.Bot, economy_cog: Economy):
         self.bot = bot
         self.economy = economy_cog
-        self.players = set()
         self.pending_game_delay = 10
-        self.do_sticky = False
 
         self.guild_sessions: dict[int, HorseRacingSession] = {}
         self.session_lock = threading.Lock()
@@ -55,8 +59,14 @@ class HorseRacingCog(commands.Cog):
     @app_commands.command(name="horse_race", description="Enter a horse race")
     async def horse_race(
         self, interaction: discord.Interaction, bet: int, horse: int
-    ):
-        """Slash command for beginning or joining a blackjack game."""
+    ) -> None:
+        """Slash command for beginning or joining a blackjack game.
+
+        Args:
+            interaction: Discord interaction to handle.
+            bet: The amount to bet.
+            horse: The horse to bet on.
+        """
         # Validate bet
         # All bets must be non-negative & not greater than the users funds
         if bet < 0:
@@ -147,7 +157,13 @@ class HorseRacingCog(commands.Cog):
     async def display_results(
         self, channel: discord.TextChannel, winners: list, losers: list
     ) -> None:
-        """Display results of a horse racing session."""
+        """Display results of a horse racing session.
+
+        Args:
+            channel: Discord channel to send message in.
+            winners: List of winning players
+            losers: List of losing players.
+        """
         # Generate text for each potential outcome
         winning_text = ""
         losing_text = ""

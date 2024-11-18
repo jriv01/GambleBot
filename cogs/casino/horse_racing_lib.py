@@ -1,5 +1,4 @@
-"""
-Horse racing library.
+"""Horse racing library.
 
 Implements functions & classes for using executing a horse racing session &
 display excecution to users.
@@ -14,20 +13,40 @@ from cogs.casino.casino_lib import GameState
 
 
 class Horse:
-    """A race horse."""
+    """A race horse.
+
+    Attributes:
+        number: Number assigned to this horse.
+        track_length: Length of the track.
+        position: Position on the track, starts at the track length.
+    """
 
     def __init__(self, number: int, track_length: int):
-        self.position = track_length
-        self.track_length = track_length
-        self.number = number
+        """Initialize a Horse instance.
 
-    def advance(self, advancement: int):
-        """Move horse down the track by specified amount."""
+        Args:
+            number: Number assigned to this horse.
+            tack_length: Length of the track.
+        """
+        self.number = number
+        self.track_length = track_length
+        self.position = track_length
+
+    def advance(self, advancement: int) -> None:
+        """Move horse down the track by specified amount.
+
+        Args:
+            advancement: Number of positions to advance by.
+        """
         self.position -= advancement
         self.position = max(self.position, 0)
 
     def finished(self) -> bool:
-        """Whether the horse reached the end of the track."""
+        """Whether the horse reached the end of the track.
+
+        Returns:
+            If the horse is at the end of the track.
+        """
         return self.position == 0
 
     def __str__(self):
@@ -39,7 +58,13 @@ class Horse:
 
 
 class Player:
-    """User that bet on the game."""
+    """User that bet on the game.
+
+    Attributes:
+        user: A discord user.
+        bet: The amount the user bet.
+        horse: The horse the user bet on.
+    """
 
     def __init__(self, user: discord.User, bet: int, horse: int):
         self.user = user
@@ -53,20 +78,41 @@ class Player:
 
 
 class HorseRacingSession:
-    """A guild session for a horse race."""
+    """A guild session for a horse race.
+
+    Attributes:
+        players: Set of all players in the session.
+        game_state: State of the horse race.
+        channel: Channel to send messages in.
+        track_length: Length of the track.
+        do_sticky: Whether to move message to bottom of the channel.
+    """
 
     def __init__(self, channel: discord.TextChannel):
         self.players = set()
         self.game_state = GameState.GAME_PENDING
         self.channel = channel
-        self.do_sticky = False
         self.track_length = 30
+        self.do_sticky = False
 
     def __contains__(self, user: discord.User) -> bool:
-        return any([user.id == player.user.id for player in self.players])
+        """Check if a user is already in the session.
+
+        Args:
+            user: User to check for.
+
+        Returns:
+            Whether the user is already in the session.
+        """
+        return any(user.id == player.user.id for player in self.players)
 
     async def start_race(self) -> tuple[list[Player], list[Player]]:
-        """Run the horse race"""
+        """Run the horse race".
+
+        Returns:
+            A tuple of 2 lists. The first list is the winning players, the
+                second the losing players.
+        """
         # Initialize horses & run the race
         self.game_state = GameState.GAME_STARTED
         horses = [Horse(i + 1, self.track_length) for i in range(6)]
@@ -84,7 +130,14 @@ class HorseRacingSession:
         return winning_players, losing_players
 
     async def do_race(self, horses: list[Horse]) -> Horse:
-        """Run the race & return winning Horse."""
+        """Run the race & return winning Horse.
+
+        Args:
+            horses: List of horses that will race.
+
+        Returns:
+            The winning horse.
+        """
         # Send initial message
         message = await self.channel.send(self.get_display(horses))
 
@@ -114,7 +167,16 @@ class HorseRacingSession:
         return winning_horse
 
     def add_player(self, user: discord.User, bet: int, horse: int) -> bool:
-        """Add a user to this session."""
+        """Add a user to this session.
+
+        Args:
+            user: Discord user to add.
+            bet: The amount the user bet.
+            horse: The horse the user bet on.
+
+        Returns:
+            Whether or not the player was successfully added to the session.
+        """
         # Check if the user can be added
         if user in self:
             return False
@@ -124,7 +186,14 @@ class HorseRacingSession:
         return True
 
     def get_display(self, horses: list[Horse]) -> str:
-        """Build the string representing the horse race."""
+        """Build the string representing the horse race.
+
+        Args:
+            horses: List of horses in the session.
+
+        Returns:
+            String representation of the horse positions.
+        """
         # Mapping for horse numbers
         emoji_mapping = {
             0: ":one:",

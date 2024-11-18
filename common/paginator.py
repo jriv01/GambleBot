@@ -8,7 +8,20 @@ import discord
 
 
 class Paginator(discord.ui.View):
-    """View that implements multiple pages of data that can be cycled through."""
+    """View that implements multiple pages of data that can be cycled through.
+
+    Attributes:
+        message: Discord message to edit & manage.
+        page_title: Title of the view.
+        data: Data to display per page.
+        data_formatter: Function to format rows of data, returns a string.
+        thumbnail_url: Thumbnail to display in embed.
+        items_per_page: Number of data items per page.
+        current_page: Current page being displayed.
+        max_pages: Max number of pages.
+        prev_button: Button to go to previous page.
+        next_button: Button to go to next page.
+    """
 
     def __init__(
         self,
@@ -55,24 +68,24 @@ class Paginator(discord.ui.View):
             self.add_item(self.prev_button)
             self.add_item(self.next_button)
 
-    async def next_callback(self, interaction: discord.Interaction):
+    async def next_callback(self, interaction: discord.Interaction) -> None:
         """Callback for "next" button interaction."""
         await interaction.response.defer()
         self.current_page += 1
         await self.update_message()
 
-    async def prev_callback(self, interaction: discord.Interaction):
+    async def prev_callback(self, interaction: discord.Interaction) -> None:
         """Callback for "previous" buttton interaction."""
         await interaction.response.defer()
         self.current_page -= 1
         await self.update_message()
 
-    async def update_message(self):
+    async def update_message(self) -> None:
         """Update buttons & message contents."""
         await self.update_buttons()
         await self.message.edit(embed=self.create_embed(), view=self)
 
-    async def update_buttons(self):
+    async def update_buttons(self) -> None:
         """Update style & functionality of buttons."""
         # Check if on first page
         if self.current_page == 0:
@@ -107,8 +120,12 @@ class Paginator(discord.ui.View):
         # Make funal update to message
         await self.message.edit(view=None)
 
-    def create_embed(self):
-        """Create an embed based on the current page of data."""
+    def create_embed(self) -> discord.Embed:
+        """Create an embed based on the current page of data.
+
+        Returns:
+            The formatted embed with the correct page data.
+        """
         # Get section of data to display
         start_index = self.current_page * self.items_per_page
         end_index = (self.current_page + 1) * self.items_per_page

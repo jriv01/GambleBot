@@ -1,6 +1,4 @@
-"""
-Cog that implements pokemon functionality.
-"""
+"""Cog that implements Pokémon functionality."""
 
 import asyncio
 import random
@@ -18,15 +16,21 @@ NUM_POKEMON = 1025
 
 
 class WildPokemon:
-    """A Pokemon that is available for capture."""
+    """A Pokemon that is available for capture.
+
+    Attributes:
+        pokemon: Pokemon instance
+        is_caught: Whether this pokemon has been caught or not
+        caught_lock: Lock for managing is_caught
+    """
 
     def __init__(self, pokemon: Pokemon):
         # Set attributes
         self.pokemon = pokemon
 
         # Variables for determining if Pokemon can be caught
-        self.caught_lock = threading.Lock()
         self.is_caught = False
+        self.caught_lock = threading.Lock()
 
     @property
     def name(self):
@@ -94,7 +98,7 @@ class WildPokemon:
 
 
 class Pokedex(Paginator):
-    """View for a player Pokedex"""
+    """View for a player Pokedex. Inherits from Paginator."""
 
     def __init__(self, user: discord.User, message, pokemon_list):
         super().__init__(
@@ -107,17 +111,26 @@ class Pokedex(Paginator):
         )
 
     def format_pokemon(self, pokemon: tuple[str, str]):
-        """Format pokemon data into a string"""
+        """Format pokemon data into a string.
+
+        Args:
+            pokemon: Tuple of 2 strings for pokedex id & name
+        """
         dex_number, name = pokemon
         return f"#{dex_number}: {name}"
 
 
 class PokemonCog(commands.Cog):
-    """A cog that implements pokemon functionality"""
+    """A cog that implements pokemon functionality.
 
-    def __init__(self, bot: commands.Bot, database_directory: str):
+    Attributes:
+        bot: A discord bot client
+        database: A SqliteDatabase instance to query on.
+    """
+
+    def __init__(self, bot: commands.Bot, database_path: str):
         self.bot = bot
-        self.database = SqliteDatabase(database_directory)
+        self.database = SqliteDatabase(database_path)
 
         # Pokemon API wrapper
         self.poke_api = PokemonApiWrapper()
@@ -177,8 +190,13 @@ class PokemonCog(commands.Cog):
     )
     async def pokedex(
         self, interaction: discord.Interaction, language: str = "en"
-    ):
-        """Get all pokemon that a user has captured."""
+    ) -> None:
+        """Get all pokemon that a user has captured.
+
+        Args:
+            interaction: Discord interaction to handle.
+            language: Which language to display Pokemon for.
+        """
         # Ensure language is of expected format
         language = language.lower()[:2]
 
@@ -261,10 +279,13 @@ class PokemonCog(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def force_spawn(self, ctx: commands.Context):
+    async def force_spawn(self, ctx: commands.Context) -> None:
         """Force a pokemon to spawn.
 
         WARNING: Aborts any existing pokemon.
+
+        Args:
+            ctx: Context command was called in.
         """
         # Check if this guild already has a wild pokemon available.
         if ctx.guild.id in self.wild_pokemon:
@@ -308,8 +329,12 @@ class PokemonCog(commands.Cog):
         self.wild_pokemon.pop(ctx.guild.id, None)
 
     @commands.command()
-    async def pokemon_enable(self, ctx: commands.Context):
-        """Configure the spawn channel for a guild."""
+    async def pokemon_enable(self, ctx: commands.Context) -> None:
+        """Configure the spawn channel for a guild.
+
+        Args:
+            ctx: Context command was called in.
+        """
         guild = ctx.guild
         channel = ctx.channel
 
@@ -326,8 +351,12 @@ class PokemonCog(commands.Cog):
         )
 
     @commands.command()
-    async def pokemon_disable(self, ctx: commands.Context):
-        """Unconfigure the spawn channel for a guild."""
+    async def pokemon_disable(self, ctx: commands.Context) -> None:
+        """Unconfigure the spawn channel for a guild.
+
+        Args:
+            ctx: Context command was called in.
+        """
         guild = ctx.guild
 
         # Unset spawn channel for this guild
@@ -346,7 +375,11 @@ class PokemonCog(commands.Cog):
         )
 
     def get_configured_guilds(self) -> dict[int, int]:
-        """Get all configured guilds."""
+        """Get all configured guilds.
+
+        Returns:
+            A map of guild ids to their registered channel ids.
+        """
         rows = self.database.execute_query(
             "SELECT * FROM `Pokemon.GuildConfigurations` WHERE channel_id IS"
             " NOT NULL"

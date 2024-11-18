@@ -1,5 +1,4 @@
-"""
-Blackjack library.
+"""Blackjack library.
 
 Implements functions & classes for using executing a blackjack session &
 display excecution to users.
@@ -14,7 +13,13 @@ from cogs.casino.casino_lib import Card, Deck, GameState
 
 
 class Player:
-    """A blackjack player"""
+    """A blackjack player
+
+    Attributes:
+        user: A discord user.
+        bet: The amount the user bet.
+        hand: The user's hand of cards.
+    """
 
     def __init__(self, user: discord.User, bet: int, hand: list[Card] = None):
         self.user = user
@@ -28,7 +33,15 @@ class Player:
 
 
 class BlackjackSession:
-    """A guild session for blackjack."""
+    """A guild session for blackjack.
+
+    Attributes:
+        bot: A discord bot client.
+        game_state: The state of the session.
+        players: Set of all players in the session.
+        text_channel: The channel the session is taking place in.
+        message_delay: The time to wait between sending messages.
+    """
 
     def __init__(self, bot: commands.Bot, channel: discord.TextChannel):
         self.bot = bot
@@ -38,10 +51,26 @@ class BlackjackSession:
         self.message_delay = 2  # Seconds
 
     def __contains__(self, user: discord.User) -> bool:
-        return any([user.id == player.user.id for player in self.players])
+        """Check if a user is already in the session.
+
+        Args:
+            user: User to check for.
+
+        Returns:
+            Whether the user is already in the session.
+        """
+        return any(user.id == player.user.id for player in self.players)
 
     def add_player(self, user: discord.User, bet: int) -> bool:
-        """Add a player to the session."""
+        """Add a user to this session.
+
+        Args:
+            user: Discord user to add.
+            bet: The amount the user bet.
+
+        Returns:
+            Whether or not the player was successfully added to the session.
+        """
         # Check if the user can be added
         if user in self:
             return False
@@ -53,7 +82,12 @@ class BlackjackSession:
     async def play_game(
         self,
     ) -> tuple[list[Player], list[Player], list[Player]]:
-        """Play a game of blackjack."""
+        """Play a game of blackjack.
+
+        Returns:
+            A tuple of 3 lists, in the format ([WINNING PLAYERS],
+                [LOSING PLAYERS], [TIED PLAYERS])
+        """
         self.game_state = GameState.GAME_STARTED
         await self.text_channel.send("Blackjack starting!")
 
@@ -100,8 +134,13 @@ class BlackjackSession:
     async def player_turn(
         self, player: Player, deck: Deck, dealer_card: Card
     ) -> None:
-        """Go through a players turn of blackjack."""
+        """Go through a players turn of blackjack.
 
+        Args:
+            player: A player whose turn to play.
+            deck: The deck of cards to play.
+            dealer_card: Dealer card that is being shown.
+        """
         # Get starting hand
         hand = player.hand
         hand_value = self.get_hand_value(hand)
@@ -178,6 +217,10 @@ class BlackjackSession:
 
         Play a full dealers turn, until the dealer can no longer draw cards.
         The dealers hand is mutated as cards are drawn.
+
+        Args:
+            hand: The dealer's hand.
+            deck: The deck of cards.
         """
         # Show dealers full hand and value
         dealer_display = self.get_hand_display(hand)
@@ -218,8 +261,12 @@ class BlackjackSession:
             await message.edit(content=message_content)
             await asyncio.sleep(self.message_delay)
 
-    async def send_pending_message(self, content):
-        """Send a message that gives the appearance of something loading"""
+    async def send_pending_message(self, content) -> None:
+        """Send a message that gives the appearance of something loading.
+
+        Args:
+            content: Message content to send.
+        """
         # Send initial message
         message = await self.text_channel.send(content)
 
@@ -230,14 +277,28 @@ class BlackjackSession:
             await asyncio.sleep(0.35)
 
     def get_hand_display(self, hand: list[Card]) -> str:
-        """Get string representation of blackjack hand."""
+        """Get string representation of blackjack hand.
+
+        Args:
+            hand: A blackhack hand.
+
+        Returns:
+            String representation of a blackjack hand.
+        """
         ret = ""
         for card in hand:
             ret += f"\n\t{card.emoji} {card}"
         return ret
 
     def get_hand_value(self, hand: list[Card]) -> int:
-        """Get integer value of a blackjack hand."""
+        """Get integer value of a blackjack hand.
+
+        Args:
+            hand: A blackhack hand.
+
+        Returns:
+            The value of the hand.
+        """
         # Get number of aces & all non-ace cards
         num_aces = len([card for card in hand if card.rank == "Ace"])
 

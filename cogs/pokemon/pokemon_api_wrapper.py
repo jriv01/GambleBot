@@ -1,4 +1,4 @@
-"""Pokemon API Wrapper."""
+"""Pokemon API Wrapper definition."""
 
 from functools import lru_cache
 import random
@@ -10,7 +10,14 @@ _API_ROOT = "https://pokeapi.co/api/v2/"
 
 
 class Pokemon:
-    """A Pokémon."""
+    """A Pokémon.
+
+    Attributes:
+        name: Name of the Pokémon.
+        pokedex_number: The pokedex entry number for this Pokémon.
+        artwork_url: URL to the official artwork for this Pokémon.
+        language: Language this Pokémon's name is in.
+    """
 
     def __init__(
         self,
@@ -33,18 +40,39 @@ class PokemonApiWrapper:
         """Make request to PokeApi v2.
 
         The 32 most recent requests are cached.
+
+        Args:
+            request: Request URL.
+
+        Returns:
+            The JSON fetched from the request.
         """
         response = requests.get(url=request, timeout=60)
         json = response.json()
         return json
 
     async def get_random_pokemon(self, language: str = "en") -> Pokemon:
-        """Get a random Pokémon."""
+        """Get a random Pokémon.
+
+        Args:
+            language: Language to get pokemon name in.
+
+        Returns:
+            A random Pokemon instance.
+        """
         pokedex_id = str(random.randint(1, _NUM_POKEMON))
         return await self.get_pokemon(pokedex_id, language)
 
     async def get_pokemon(self, resource: str, language: str = "en") -> Pokemon:
-        """Get a Pokémon by their resource name."""
+        """Get a Pokémon by their resource name.
+
+        Args:
+            resource: Pokemon ID or name to get.
+            language: Language to get pokemon name in.
+
+        Returns:
+            An instance of the requested pokemon.
+        """
         # Remove any leading zeros if resource is pokedex number
         resource = resource.lstrip("0")
 

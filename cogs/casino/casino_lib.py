@@ -1,4 +1,6 @@
-"""Casino library."""
+"""Casino library containing definitions for common or non-specific casino
+elements.
+"""
 
 import enum
 import random
@@ -13,6 +15,14 @@ class GameState(enum.Enum):
 
 
 class Card:
+    """A playing card.
+
+    Attributes:
+        suit: The suit of the card.
+        rank: The rank of the card.
+        emoji: Emoji representation of the suit.
+    """
+
     ALL_RANKS = [
         "Ace",
         "2",
@@ -37,6 +47,14 @@ class Card:
         self.emoji = f":{suit.lower()}:"
 
     def get_value(self, high_aces=True) -> int:
+        """Get the value of this card.
+
+        Args:
+            high_aces: Whether to evaluate aces as 11 or 1.
+
+        Returns:
+            The value of the card.
+        """
         if self.rank == "Ace":
             return 11 if high_aces else 1
         elif not self.rank.isdigit():
@@ -51,8 +69,19 @@ class Card:
 
 
 class Deck:
-    def __init__(self, num_decks: int = 1):
+    """A deck of cards.
 
+    Attributes:
+        cards: A list of Card instances.
+    """
+
+    def __init__(self, num_decks: int = 1):
+        """Initialize a deck instance.
+
+        Args:
+            num_decks: Number of decks to use.
+        """
+        # Build deck
         self.cards = []
         for _ in range(num_decks):
             for suit in Card.ALL_SUITS:
@@ -60,7 +89,13 @@ class Deck:
                     self.cards.append(Card(suit, rank))
 
     def shuffle(self) -> None:
+        """Shuffle the deck of cards."""
         random.shuffle(self.cards)
 
     def draw_card(self) -> Card:
+        """Draw a Card from the top of the deck.
+
+        Returns:
+            The Card at the top of the stack.
+        """
         return self.cards.pop()
