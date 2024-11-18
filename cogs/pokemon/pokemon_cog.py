@@ -126,6 +126,9 @@ class PokemonCog(commands.Cog):
     Attributes:
         bot: A discord bot client
         database: A SqliteDatabase instance to query on.
+        poke_api: Poke API V2 wrapper instance.
+        wild_pokemon: Mapping of guild ids to wild pokemon.
+        capture_timeout: Amount of time a wild pokemon can be captured for.
     """
 
     # Group for all pokemon related slash commands.

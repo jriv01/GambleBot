@@ -17,9 +17,9 @@ class Economy(commands.Cog):
         database: A SqliteDatabase instance to query on.
     """
 
-    def __init__(self, bot: commands.Bot, database_directory: str):
+    def __init__(self, bot: commands.Bot, database_path: str):
         self.bot = bot
-        self.database = SqliteDatabase(database_directory)
+        self.database = SqliteDatabase(database_path)
 
     @commands.Cog.listener()
     async def on_ready(self):

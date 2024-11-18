@@ -60,7 +60,7 @@ async def main():
     """Main function."""
     async with client:
         # Initialize cogs
-        economy_cog = Economy(client, database_directory=os.getenv("DATA_PATH"))
+        economy_cog = Economy(client, database_path=os.getenv("DATA_PATH"))
         blackjack_cog = Blackjack(client, economy_cog=economy_cog)
         dice_cog = Dice(client, economy_cog=economy_cog)
         horse_cog = HorseRacingCog(client, economy_cog=economy_cog)
