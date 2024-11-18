@@ -128,6 +128,11 @@ class PokemonCog(commands.Cog):
         database: A SqliteDatabase instance to query on.
     """
 
+    # Group for all pokemon related slash commands.
+    group = app_commands.Group(
+        name="pokemon", description="Pokemon related commands"
+    )
+
     def __init__(self, bot: commands.Bot, database_path: str):
         self.bot = bot
         self.database = SqliteDatabase(database_path)
@@ -185,7 +190,7 @@ class PokemonCog(commands.Cog):
         # Remove wild pokemon from that guild, if it exists
         self.wild_pokemon.pop(guild.id, None)
 
-    @app_commands.command(
+    @group.command(
         name="pokedex", description="See what Pokémon you've captured."
     )
     async def pokedex(
@@ -223,6 +228,52 @@ class PokemonCog(commands.Cog):
             interaction.user, await interaction.original_response(), rows
         )
         await view.update_message()
+
+    @group.command(
+        name="enable",
+        description=(
+            "Set this channel for random Pokemon spawns in this server."
+        ),
+    )
+    async def enable(self, interaction: discord.Interaction) -> None:
+        """Configure the spawn channel for a guild."""
+        guild = interaction.guild
+        channel = interaction.channel
+
+        # Set the new spawn channel for this guild
+        self.database.execute_query(
+            "UPDATE `Pokemon.GuileConfigurations` SET channel_id = ? WHERE"
+            " guild_id = ?",
+            channel.id,
+            guild.id,
+        )
+
+        await interaction.response.send_message(
+            "Configured random pokemon spawns for this server to this channel."
+        )
+
+    @group.command(
+        name="disable",
+        description="Disable random Pokemon spawns for this server.",
+    )
+    async def disable(self, interaction: discord.Interaction) -> None:
+        """Unconfigure the spawn channel for a guild."""
+        guild = interaction.guild
+
+        # Unset spawn channel for this guild
+        self.database.execute_query(
+            "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
+            " guild_id = ?",
+            None,
+            guild.id,
+        )
+
+        # Remove wild pokemon from that guild, if it exists
+        self.wild_pokemon.pop(guild.id, None)
+
+        await interaction.response.send_message(
+            "Unconfigured random pokemon spawns for this server."
+        )
 
     @tasks.loop(seconds=60)
     async def spawn_pokemon(self):
@@ -327,52 +378,6 @@ class PokemonCog(commands.Cog):
 
         # Remove pokemon from memory
         self.wild_pokemon.pop(ctx.guild.id, None)
-
-    @commands.command()
-    async def pokemon_enable(self, ctx: commands.Context) -> None:
-        """Configure the spawn channel for a guild.
-
-        Args:
-            ctx: Context command was called in.
-        """
-        guild = ctx.guild
-        channel = ctx.channel
-
-        # Set the new spawn channel for this guild
-        self.database.execute_query(
-            "UPDATE `Pokemon.GuileConfigurations` SET channel_id = ? WHERE"
-            " guild_id = ?",
-            channel.id,
-            guild.id,
-        )
-
-        await ctx.message.reply(
-            "Configured random pokemon spawns for this server to this channel."
-        )
-
-    @commands.command()
-    async def pokemon_disable(self, ctx: commands.Context) -> None:
-        """Unconfigure the spawn channel for a guild.
-
-        Args:
-            ctx: Context command was called in.
-        """
-        guild = ctx.guild
-
-        # Unset spawn channel for this guild
-        self.database.execute_query(
-            "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
-            " guild_id = ?",
-            None,
-            guild.id,
-        )
-
-        # Remove wild pokemon from that guild, if it exists
-        self.wild_pokemon.pop(guild.id, None)
-
-        await ctx.message.reply(
-            "Unconfigured random pokemon spawns for this server."
-        )
 
     def get_configured_guilds(self) -> dict[int, int]:
         """Get all configured guilds.
