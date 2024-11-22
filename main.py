@@ -13,6 +13,7 @@ import dotenv
 from cogs.casino.blackjack_cog import Blackjack
 from cogs.casino.dice_cog import Dice
 from cogs.casino.horse_racing_cog import HorseRacingCog
+from cogs.casino.slots_cog import SlotsCog
 from cogs.economy_cog import Economy
 from cogs.income_cog import Income
 from cogs.pokemon.pokemon_cog import PokemonCog
@@ -64,6 +65,7 @@ async def main():
         blackjack_cog = Blackjack(client, economy_cog=economy_cog)
         dice_cog = Dice(client, economy_cog=economy_cog)
         horse_cog = HorseRacingCog(client, economy_cog=economy_cog)
+        slots_cog = SlotsCog(client, economy_cog=economy_cog)
         income_cog = Income(client, economy_cog=economy_cog)
         pokemon_cog = PokemonCog(client, os.getenv("DATA_PATH"))
 
@@ -74,6 +76,7 @@ async def main():
         await client.add_cog(horse_cog)
         await client.add_cog(income_cog)
         await client.add_cog(pokemon_cog)
+        await client.add_cog(slots_cog)
         await client.start(token=os.getenv("DISCORD_TOKEN"))
 
 

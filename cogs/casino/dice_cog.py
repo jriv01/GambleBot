@@ -28,7 +28,7 @@ class Dice(commands.Cog):
 
     @app_commands.command(name="dice", description="Roll 4 or higher to win!")
     async def dice(self, interaction: discord.Interaction, bet: int):
-        """Slash command for beginning or joining a blackjack game.
+        """Slash command for rolling dice.
 
         Args:
             interation: Discord interaction to handle.
