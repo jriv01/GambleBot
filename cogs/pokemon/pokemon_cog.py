@@ -117,7 +117,7 @@ class Pokedex(Paginator):
             pokemon: Tuple of 2 strings for pokedex id & name
         """
         dex_number, name = pokemon
-        return f"#{dex_number}: {name}"
+        return f"#{dex_number.zfill(4)}: {name}"
 
 
 class PokemonCog(commands.Cog):
