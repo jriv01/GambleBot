@@ -16,6 +16,7 @@ from cogs.casino.horse_racing_cog import HorseRacingCog
 from cogs.casino.slots_cog import SlotsCog
 from cogs.economy_cog import Economy
 from cogs.income_cog import Income
+from cogs.random_message_cog import RandomMessageCog
 from cogs.pokemon.pokemon_cog import PokemonCog
 
 
@@ -67,6 +68,7 @@ async def main():
         horse_cog = HorseRacingCog(client, economy_cog=economy_cog)
         slots_cog = SlotsCog(client, economy_cog=economy_cog)
         income_cog = Income(client, economy_cog=economy_cog)
+        random_message_cog = RandomMessageCog(client)
         pokemon_cog = PokemonCog(client, os.getenv("DATA_PATH"))
 
         # Initialize client
@@ -75,6 +77,7 @@ async def main():
         await client.add_cog(dice_cog)
         await client.add_cog(horse_cog)
         await client.add_cog(income_cog)
+        await client.add_cog(random_message_cog)
         await client.add_cog(pokemon_cog)
         await client.add_cog(slots_cog)
         await client.start(token=os.getenv("DISCORD_TOKEN"))
