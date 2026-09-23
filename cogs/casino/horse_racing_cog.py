@@ -9,7 +9,6 @@ from discord.ext import commands
 
 from cogs.casino.casino_lib import GameState
 from cogs.casino.horse_racing_lib import HorseRacingSession
-from cogs.economy_cog import Economy
 
 
 class HorseRacingCog(commands.Cog):
@@ -23,18 +22,21 @@ class HorseRacingCog(commands.Cog):
         session_lock: Lock to acquire when handling sessions.
     """
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.economy = economy_cog
         self.pending_game_delay = 10
 
         self.guild_sessions: dict[int, HorseRacingSession] = {}
         self.session_lock = threading.Lock()
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
+        self.economy = None
+
+    async def cog_load(self):
+        self.economy = self.bot.get_cog("Economy")
+        if not self.economy:
+            raise RuntimeError(
+                "Horseracing cog requires Economy cog to be loaded first"
+            )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -84,8 +86,7 @@ class HorseRacingCog(commands.Cog):
         # Validate horse
         if not 1 <= horse <= 6:
             await interaction.response.send_message(
-                f"{horse} is not a valid horse number. You can bet on horses 1"
-                " - 6.",
+                f"{horse} is not a valid horse number. You can bet on horses 1" " - 6.",
                 ephemeral=True,
             )
             return
@@ -101,9 +102,7 @@ class HorseRacingCog(commands.Cog):
             current_session = self.guild_sessions.get(guild.id, None)
             if not current_session:
                 # Create new session
-                self.guild_sessions[guild.id] = HorseRacingSession(
-                    interaction.channel
-                )
+                self.guild_sessions[guild.id] = HorseRacingSession(interaction.channel)
 
                 # Add player & pay bet
                 self.guild_sessions[guild.id].add_player(user, bet, horse)
@@ -173,9 +172,7 @@ class HorseRacingCog(commands.Cog):
                 f"{player.mention} won and cashed out {player.bet*2} gold!\n"
             )
         for player in losers:
-            losing_text += (
-                f"{player.mention} lost their bet of {player.bet} gold.\n"
-            )
+            losing_text += f"{player.mention} lost their bet of {player.bet} gold.\n"
 
         # Build & send the game result embed
         embed = discord.Embed(title="GAME RESULTS")
@@ -184,3 +181,7 @@ class HorseRacingCog(commands.Cog):
         if losers:
             embed.add_field(name="LOSERS", value=losing_text, inline=False)
         await channel.send(embed=embed)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(HorseRacingCog(bot))

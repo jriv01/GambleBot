@@ -9,7 +9,6 @@ from discord.ext import commands
 
 from cogs.casino.blackjack_lib import BlackjackSession
 from cogs.casino.casino_lib import GameState
-from cogs.economy_cog import Economy
 
 
 class Blackjack(commands.Cog):
@@ -23,24 +22,22 @@ class Blackjack(commands.Cog):
         session_lock: Lock to acquire when handling sessions.
     """
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.economy = economy_cog
         self.pending_game_delay = 15
         self.guild_sessions = {}
         self.session_lock = threading.Lock()
+        self.economy = None
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
+    async def cog_load(self):
+        self.economy = self.bot.get_cog("Economy")
+        if not self.economy:
+            raise RuntimeError("Blackjack cog requires Economy cog to be loaded first")
 
     @app_commands.command(
         name="blackjack", description="Start or join a game of Blackjack!"
     )
-    async def blackjack(
-        self, interaction: discord.Interaction, bet: int
-    ) -> None:
+    async def blackjack(self, interaction: discord.Interaction, bet: int) -> None:
         """Slash command for beginning or joining a blackjack game.
 
         Args:
@@ -95,8 +92,7 @@ class Blackjack(commands.Cog):
                     # Add new player to session
                     current_session.add_player(user, bet)
                     await interaction.response.send_message(
-                        f"{user.mention} has joined the table with a bet of"
-                        f" {bet}!"
+                        f"{user.mention} has joined the table with a bet of" f" {bet}!"
                     )
                 return
             else:
@@ -145,17 +141,11 @@ class Blackjack(commands.Cog):
         loser_text = ""
         tie_text = ""
         for player in winners:
-            winner_text += (
-                f"{player.mention} won and cashed out {player.bet*2} gold!\n"
-            )
+            winner_text += f"{player.mention} won and cashed out {player.bet*2} gold!\n"
         for player in losers:
-            loser_text += (
-                f"{player.mention} lost their bet of {player.bet} gold.\n"
-            )
+            loser_text += f"{player.mention} lost their bet of {player.bet} gold.\n"
         for player in ties:
-            tie_text += (
-                f"{player.mention} tied and cashed out {player.bet} gold.\n"
-            )
+            tie_text += f"{player.mention} tied and cashed out {player.bet} gold.\n"
 
         # Build & send the game result embed
         embed = discord.Embed(title="GAME RESULTS")
@@ -166,3 +156,7 @@ class Blackjack(commands.Cog):
         if ties:
             embed.add_field(name="TIES", value=tie_text, inline=False)
         await channel.send(embed=embed)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(Blackjack(bot))

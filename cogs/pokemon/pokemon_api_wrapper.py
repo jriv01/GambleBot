@@ -1,7 +1,7 @@
 """Pokemon API Wrapper definition."""
 
-from functools import lru_cache
 import random
+from functools import lru_cache
 
 import requests
 
@@ -78,9 +78,7 @@ class PokemonApiWrapper:
 
         # Request pokemon & species information
         pokemon_info = self._get_request(_API_ROOT + f"pokemon/{resource}")
-        species_info = self._get_request(
-            _API_ROOT + f"pokemon-species/{resource}"
-        )
+        species_info = self._get_request(_API_ROOT + f"pokemon-species/{resource}")
 
         # Get the name for this resource in the specified language
         name = ""
@@ -92,9 +90,7 @@ class PokemonApiWrapper:
 
         # Get pokemon attributes
         pokedex_number = pokemon_info["id"]
-        artwork = pokemon_info["sprites"]["other"]["official-artwork"][
-            "front_default"
-        ]
+        artwork = pokemon_info["sprites"]["other"]["official-artwork"]["front_default"]
         return Pokemon(
             name=name,
             pokedex_number=pokedex_number,

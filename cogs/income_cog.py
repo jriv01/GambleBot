@@ -5,8 +5,6 @@ from threading import Lock
 import discord
 from discord.ext import commands, tasks
 
-from cogs.economy_cog import Economy
-
 
 class Income(commands.Cog):
     """A cog that implements income functionality.
@@ -18,18 +16,20 @@ class Income(commands.Cog):
         pending_counts: Number of messages to cash in for each user.
     """
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.economy = economy_cog
         self.lock = Lock()
         self.pending_counts = {}
+        self.economy = None
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
-        # Task loop
+    async def cog_load(self) -> None:
+        self.economy = self.bot.get_cog("Economy")
+        if not self.economy:
+            raise RuntimeError("income cog requires Economy cog to be loaded first")
         self.direct_deposit.start()
+
+    async def cog_unload(self) -> None:
+        self.direct_deposit.stop()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -52,3 +52,7 @@ class Income(commands.Cog):
             for user, count in self.pending_counts.items():
                 await self.economy.deposit(user, count * 5)
             self.pending_counts = {}
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(Income(bot))

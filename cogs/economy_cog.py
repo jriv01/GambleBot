@@ -1,5 +1,7 @@
 """Cog that implements an economy."""
 
+import os
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -20,11 +22,6 @@ class Economy(commands.Cog):
     def __init__(self, bot: commands.Bot, database_path: str):
         self.bot = bot
         self.database = SqliteDatabase(database_path)
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
 
     @app_commands.command(name="funds", description="Check your funds.")
     async def funds(self, interaction: discord.Interaction) -> None:
@@ -170,3 +167,8 @@ class Economy(commands.Cog):
             balance = result[0][0]
 
         return balance
+
+
+async def setup(bot):
+    data_path = os.getenv("DATA_PATH")
+    await bot.add_cog(Economy(bot, database_path=data_path))

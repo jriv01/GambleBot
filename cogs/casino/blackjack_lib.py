@@ -131,9 +131,7 @@ class BlackjackSession:
 
         return winners, losers, ties
 
-    async def player_turn(
-        self, player: Player, deck: Deck, dealer_card: Card
-    ) -> None:
+    async def player_turn(self, player: Player, deck: Deck, dealer_card: Card) -> None:
         """Go through a players turn of blackjack.
 
         Args:
@@ -156,8 +154,7 @@ class BlackjackSession:
             f" {dealer_card.get_value()}\n\n"
         )
         message_content += (
-            f"You drew a hand of... {hand_display}\nFor a value of"
-            f" {hand_value}."
+            f"You drew a hand of... {hand_display}\nFor a value of" f" {hand_value}."
         )
         message_content += (
             "\n\nWould you like to HIT or STAND?" if hand_value != 21 else ""
@@ -175,8 +172,7 @@ class BlackjackSession:
                 )
             except asyncio.TimeoutError:
                 await self.text_channel.send(
-                    f"{player.mention} took too long to reply! Their turn is"
-                    " over."
+                    f"{player.mention} took too long to reply! Their turn is" " over."
                 )
                 break
 
@@ -228,8 +224,7 @@ class BlackjackSession:
         await self.send_pending_message("Revealing dealer hand")
         message_content = "=" * 30 + "\n"
         message_content += (
-            f"Dealer has drawn...{dealer_display}\nFor a value of"
-            f" {dealer_value}."
+            f"Dealer has drawn...{dealer_display}\nFor a value of" f" {dealer_value}."
         )
         message_content += "\n" + "=" * 30
         message = await self.text_channel.send(message_content)

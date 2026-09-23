@@ -4,6 +4,7 @@ it into cyclable pages. Pages are in the form of embeds in a discord message.
 """
 
 from typing import Any, Callable
+
 import discord
 
 
@@ -133,11 +134,7 @@ class Paginator(discord.ui.View):
 
         # Create embed
         title = self.page_title
-        title += (
-            f" || Page {self.current_page + 1}\n"
-            if self.max_pages > 1
-            else "\n"
-        )
+        title += f" || Page {self.current_page + 1}\n" if self.max_pages > 1 else "\n"
         title += "=" * 15
         embed = discord.Embed(
             title=title,
@@ -149,7 +146,5 @@ class Paginator(discord.ui.View):
 
         # Add each data element to embed
         for element in portion:
-            embed.add_field(
-                name=self.data_formatter(element), value="", inline=False
-            )
+            embed.add_field(name=self.data_formatter(element), value="", inline=False)
         return embed

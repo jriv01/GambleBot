@@ -6,8 +6,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cogs.economy_cog import Economy
-
 
 class Dice(commands.Cog):
     """A cog that implements dice functionality.
@@ -17,14 +15,14 @@ class Dice(commands.Cog):
         economy_cog: A commands.Cog instance for managing player funds.
     """
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.economy = economy_cog
+        self.economy = None
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
+    async def cog_load(self):
+        self.economy = self.bot.get_cog("Economy")
+        if not self.economy:
+            raise RuntimeError("Dice cog requires Economy cog to be loaded first")
 
     @app_commands.command(name="dice", description="Roll 4 or higher to win!")
     async def dice(self, interaction: discord.Interaction, bet: int):
@@ -61,3 +59,7 @@ class Dice(commands.Cog):
                 f"{user.mention} rolled a {dice_roll} and lost {bet}!"
             )
             await self.economy.withdraw(user, bet)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(Dice(bot))
