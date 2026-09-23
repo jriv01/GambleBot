@@ -4,7 +4,11 @@ Build & run a Discord bot.
 
 import asyncio
 from itertools import cycle
+import logging
 import os
+import traceback
+import sys
+
 
 import discord
 from discord.ext import commands, tasks
@@ -29,10 +33,52 @@ class Client(commands.Bot):
 
         self.change_bot_status.start()
 
-    @tasks.loop(seconds=260)
+    async def setup_hook(self):
+        self.tree.on_error = self.on_app_command_error
+
+    @tasks.loop(seconds=180)
     async def change_bot_status(self):
-        """Change the bot status every 30 seconds"""
+        """Change the bot status every 3 minutes"""
         await self.change_presence(activity=discord.Game(next(possible_status)))
+
+    async def on_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: discord.app_commands.AppCommandError,
+    ) -> None:
+        """
+        Handle errors in app commands
+
+        Args:
+            interaction: The discord interaction associated with the app command
+            error: The error that occured
+        """
+        if isinstance(error, discord.app_commands.CommandInvokeError):
+            error = error.original
+
+        command_name = interaction.command.name if interaction.command else "Unknown"
+        logging.error("Exception in slash command %s", command_name)
+        traceback.print_exception(
+            type(error), error, error.__traceback__, file=sys.stderr
+        )
+
+        message = f"Internal error occured processing `{command_name}`"
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+
+    async def on_error(self, event_method: str, /, *args, **kwargs) -> None:
+        """
+        Handle errors in event listeners
+
+        Args:
+            event_method: The event method the error occured in
+            *args: The positional arguments passed to the event.
+            **kwargs: The keyword arguments passed to the event.
+        """
+        logging.error("[Event Error] Failed in event `%s`", event_method)
+        traceback.print_exc(file=sys.stderr)
 
 
 dotenv.load_dotenv()
