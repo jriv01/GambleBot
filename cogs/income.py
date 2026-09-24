@@ -5,8 +5,10 @@ from threading import Lock
 import discord
 from discord.ext import commands, tasks
 
+from common.base_cog import BaseCog
 
-class Income(commands.Cog):
+
+class Income(BaseCog):
     """A cog that implements income functionality.
 
     Attributes:
@@ -17,15 +19,11 @@ class Income(commands.Cog):
     """
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
         self.lock = Lock()
         self.pending_counts = {}
-        self.economy = None
 
     async def cog_load(self) -> None:
-        self.economy = self.bot.get_cog("Economy")
-        if not self.economy:
-            raise RuntimeError("income cog requires Economy cog to be loaded first")
         self.direct_deposit.start()
 
     async def cog_unload(self) -> None:

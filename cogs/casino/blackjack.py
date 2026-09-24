@@ -7,32 +7,25 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from common.casino_cog import CasinoCog
 from lib.casino.blackjack_lib import BlackjackSession
 from lib.casino.casino_lib import GameState
 
 
-class Blackjack(commands.Cog):
+class Blackjack(CasinoCog):
     """A cog that implements blackjack functionality.
 
     Attributes:
-        bot: A discord bot client.
-        economy: A discord.commands.Cog instance that manages player funds.
         pending_game_delay: Amount of time to wait before starting a game.
         guild_sessions: Map of guild ids to horse racing sessions.
         session_lock: Lock to acquire when handling sessions.
     """
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
         self.pending_game_delay = 15
         self.guild_sessions = {}
         self.session_lock = threading.Lock()
-        self.economy = None
-
-    async def cog_load(self):
-        self.economy = self.bot.get_cog("Economy")
-        if not self.economy:
-            raise RuntimeError("Blackjack cog requires Economy cog to be loaded first")
 
     @app_commands.command(
         name="blackjack", description="Start or join a game of Blackjack!"
@@ -44,18 +37,7 @@ class Blackjack(commands.Cog):
             interaction: Discord interaction to handle.
             bet: Amount user wishes to bet.
         """
-        # Validate bet
-        # All bets must be non-negative & not greater than the users funds
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
+        if not await self.validate_bet(interaction, bet):
             return
 
         # Interaction variables
@@ -91,6 +73,7 @@ class Blackjack(commands.Cog):
                 else:
                     # Add new player to session
                     current_session.add_player(user, bet)
+                    await self.economy.withdraw(user, bet)
                     await interaction.response.send_message(
                         f"{user.mention} has joined the table with a bet of" f" {bet}!"
                     )

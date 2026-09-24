@@ -6,23 +6,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from common.casino_cog import CasinoCog
 
-class Dice(commands.Cog):
-    """A cog that implements dice functionality.
 
-    Attributes:
-        bot: A discord bot client.
-        economy_cog: A commands.Cog instance for managing player funds.
-    """
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.economy = None
-
-    async def cog_load(self):
-        self.economy = self.bot.get_cog("Economy")
-        if not self.economy:
-            raise RuntimeError("Dice cog requires Economy cog to be loaded first")
+class Dice(CasinoCog):
+    """A cog that implements dice functionality."""
 
     @app_commands.command(name="dice", description="Roll 4 or higher to win!")
     async def dice(self, interaction: discord.Interaction, bet: int):
@@ -32,17 +20,7 @@ class Dice(commands.Cog):
             interation: Discord interaction to handle.
             bet: The amount user wishes to bet.
         """
-        # Validate bet
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
+        if not await self.validate_bet(interaction, bet):
             return
 
         user = interaction.user
