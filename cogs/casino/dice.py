@@ -6,10 +6,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from common.casino_cog import CasinoCog
+from common.casino_cog import BaseCasinoCog
 
 
-class Dice(CasinoCog):
+class Dice(BaseCasinoCog):
     """A cog that implements dice functionality."""
 
     @app_commands.command(name="dice", description="Roll 4 or higher to win!")
@@ -29,12 +29,12 @@ class Dice(CasinoCog):
         dice_roll = random.randint(1, 6)
         if dice_roll >= 4:  # If 4 or higher, player wins
             await interaction.response.send_message(
-                f"{user.mention} rolled a {dice_roll} and won {bet}!"
+                f":game_die: {user.mention} rolled a {dice_roll} and won {bet}!"
             )
             await self.economy.deposit(user, bet)
         else:  # If 3 or lower, player lose
             await interaction.response.send_message(
-                f"{user.mention} rolled a {dice_roll} and lost {bet}!"
+                f":game_die: {user.mention} rolled a {dice_roll} and lost {bet}!"
             )
             await self.economy.withdraw(user, bet)
 

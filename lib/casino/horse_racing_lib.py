@@ -8,8 +8,9 @@ import asyncio
 import random
 
 import discord
+from discord.ext import commands
 
-from lib.casino.casino_lib import GameState
+from lib.casino.casino_lib import GameSession, GameState, Player
 
 
 class Horse:
@@ -57,64 +58,29 @@ class Horse:
         )
 
 
-class Player:
-    """User that bet on the game.
-
-    Attributes:
-        user: A discord user.
-        bet: The amount the user bet.
-        horse: The horse the user bet on.
-    """
-
-    def __init__(self, user: discord.User, bet: int, horse: int):
-        self.user = user
-        self.bet = bet
-        self.horse = horse
-
-    @property
-    def mention(self):
-        """Discord @ mention"""
-        return self.user.mention
-
-
-class HorseRacingSession:
+class HorseRacingSession(GameSession):
     """A guild session for a horse race.
 
     Attributes:
-        players: Set of all players in the session.
-        game_state: State of the horse race.
         channel: Channel to send messages in.
         track_length: Length of the track.
         do_sticky: Whether to move message to bottom of the channel.
     """
 
-    def __init__(self, channel: discord.TextChannel):
-        self.players = set()
-        self.game_state = GameState.GAME_PENDING
-        self.channel = channel
+    def __init__(self, bot: commands.Bot, text_channel: discord.TextChannel):
+        super().__init__(bot, text_channel)
         self.track_length = 30
         self.do_sticky = False
 
-    def __contains__(self, user: discord.User) -> bool:
-        """Check if a user is already in the session.
-
-        Args:
-            user: User to check for.
-
-        Returns:
-            Whether the user is already in the session.
-        """
-        return any(user.id == player.user.id for player in self.players)
-
-    async def start_race(self) -> tuple[list[Player], list[Player]]:
+    async def play_game(self) -> tuple[list[Player], list[Player], list[Player]]:
         """Run the horse race".
 
         Returns:
-            A tuple of 2 lists. The first list is the winning players, the
-                second the losing players.
+            A tuple of 3 lists, in the format ([WINNING PLAYERS],
+                [LOSING PLAYERS], [TIED PLAYERS])
         """
         # Initialize horses & run the race
-        self.game_state = GameState.GAME_STARTED
+        self.game_state = GameState.GAME_IN_PROGRESS
         horses = [Horse(i + 1, self.track_length) for i in range(6)]
         winning_horse = await self.do_race(horses)
 
@@ -127,7 +93,7 @@ class HorseRacingSession:
             else:
                 losing_players.append(player)
 
-        return winning_players, losing_players
+        return winning_players, losing_players, []
 
     async def do_race(self, horses: list[Horse]) -> Horse:
         """Run the race & return winning Horse.
@@ -139,14 +105,14 @@ class HorseRacingSession:
             The winning horse.
         """
         # Send initial message
-        message = await self.channel.send(self.get_display(horses))
+        message = await self.text_channel.send(self.get_display(horses))
 
         # Keep running until one horse has won
         winning_horse = None
         while not winning_horse:
             # Pick a random horse to advance by a random amount, [1,3]
             horse = random.choice(horses)
-            horse.advance(random.randint(2, 4))
+            horse.advance(random.randint(4, 6))
 
             # Check if the chosen horse has won
             if horse.finished():
@@ -158,32 +124,13 @@ class HorseRacingSession:
             if self.do_sticky:
                 # Delete & replace the message
                 await message.delete()
-                message = await self.channel.send(display, silent=True)
+                message = await self.text_channel.send(display, silent=True)
                 self.do_sticky = False
             else:
                 await message.edit(content=display)
             await asyncio.sleep(1)
 
         return winning_horse
-
-    def add_player(self, user: discord.User, bet: int, horse: int) -> bool:
-        """Add a user to this session.
-
-        Args:
-            user: Discord user to add.
-            bet: The amount the user bet.
-            horse: The horse the user bet on.
-
-        Returns:
-            Whether or not the player was successfully added to the session.
-        """
-        # Check if the user can be added
-        if user in self:
-            return False
-
-        # Add user
-        self.players.add(Player(user, bet, horse))
-        return True
 
     def get_display(self, horses: list[Horse]) -> str:
         """Build the string representing the horse race.
