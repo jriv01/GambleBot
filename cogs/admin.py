@@ -23,7 +23,7 @@ class AdminCog(commands.Cog):
     async def cog_check(  # pylint: disable=invalid-overridden-method
         self, ctx: commands.Context
     ) -> bool:
-        """Checks to perform prior to every Admin command."""
+        """Checks to perform prior to every admin command."""
         return await self.bot.is_owner(ctx.author)
 
     @commands.command(name="sync")

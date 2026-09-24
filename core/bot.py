@@ -30,7 +30,7 @@ class Client(commands.Bot):
 
     async def load_extensions(self):
         """Load all extensions found in cogs directory."""
-        for path in Path("./cogs").rglob("*_cog.py"):
+        for path in Path("./cogs").rglob("*.py"):
             if path.name.startswith(("_", ".")):
                 continue
             extension = ".".join(path.with_suffix("").parts)

@@ -9,9 +9,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from cogs.pokemon.pokemon_api_wrapper import Pokemon, PokemonApiWrapper
 from common.database_utilities import SqliteDatabase
 from common.paginator import Paginator
+from lib.pokemon.pokemon_api_wrapper import Pokemon, PokemonApiWrapper
 
 NUM_POKEMON = 1025
 

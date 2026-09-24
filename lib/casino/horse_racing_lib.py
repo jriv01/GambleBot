@@ -9,7 +9,7 @@ import random
 
 import discord
 
-from cogs.casino.casino_lib import GameState
+from lib.casino.casino_lib import GameState
 
 
 class Horse:
