@@ -1,8 +1,8 @@
 """Cog that implements random message pull functionality."""
 
+import random
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
-import random
 
 import discord
 from discord import app_commands
@@ -18,11 +18,6 @@ class RandomMessageCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
 
     @app_commands.command(
         name="random_message",
@@ -43,7 +38,7 @@ class RandomMessageCog(commands.Cog):
         """
 
         # Check if we're looking for bot messages
-        if user.bot:
+        if user and user.bot:
             await interaction.response.send_message(
                 f"Humans only! {user.name} is a bot.", ephemeral=True
             )
@@ -177,3 +172,7 @@ class RandomMessageCog(commands.Cog):
         # Return a random datetime past the start of the interval.
         random_second = random.randrange(seconds_delta)
         return start_datetime + timedelta(seconds=random_second)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(RandomMessageCog(bot))

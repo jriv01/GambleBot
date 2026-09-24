@@ -4,10 +4,8 @@ import asyncio
 import random
 
 import discord
-from discord import app_commands, Color
+from discord import Color, app_commands
 from discord.ext import commands
-
-from cogs.economy_cog import Economy
 
 
 class Symbol:
@@ -86,9 +84,7 @@ class SlotsCog(commands.Cog):
             probability=0.075,
             color=Color.yellow(),
         ),
-        Symbol(
-            emoji=":100:", multiplier=2, probability=0.05, color=Color.red()
-        ),
+        Symbol(emoji=":100:", multiplier=2, probability=0.05, color=Color.red()),
         Symbol(
             emoji=":money_bag:",
             multiplier=10,
@@ -103,16 +99,16 @@ class SlotsCog(commands.Cog):
         ),
     ]
 
-    def __init__(self, bot: commands.Bot, economy_cog: Economy):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.economy = economy_cog
         self.num_symbols = 7
         self.active_sessions = set()
+        self.economy = None
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
+    async def cog_load(self):
+        self.economy = self.bot.get_cog("Economy")
+        if not self.economy:
+            raise RuntimeError("Slots cog requires Economy cog to be loaded first")
 
     @app_commands.command(name="slots", description="...")
     async def slots(self, interaction: discord.Interaction, bet: int) -> None:
@@ -261,3 +257,7 @@ class SlotsCog(commands.Cog):
             + "\n"
             + lower_sqs
         )
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(SlotsCog(bot))

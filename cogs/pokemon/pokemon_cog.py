@@ -1,6 +1,7 @@
 """Cog that implements Pokémon functionality."""
 
 import asyncio
+import os
 import random
 import threading
 
@@ -8,9 +9,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from cogs.pokemon.pokemon_api_wrapper import Pokemon, PokemonApiWrapper
 from common.database_utilities import SqliteDatabase
 from common.paginator import Paginator
-from cogs.pokemon.pokemon_api_wrapper import Pokemon, PokemonApiWrapper
 
 NUM_POKEMON = 1025
 
@@ -132,9 +133,7 @@ class PokemonCog(commands.Cog):
     """
 
     # Group for all pokemon related slash commands.
-    group = app_commands.Group(
-        name="pokemon", description="Pokemon related commands"
-    )
+    group = app_commands.Group(name="pokemon", description="Pokemon related commands")
 
     def __init__(self, bot: commands.Bot, database_path: str):
         self.bot = bot
@@ -149,11 +148,11 @@ class PokemonCog(commands.Cog):
         # Amount of time wild pokemon are available for
         self.capture_timeout = 10  # Minutes
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Listen for when cog is ready."""
-        print(f"{__name__} is online!")
+    async def cog_load(self):
         self.spawn_pokemon.start()
+
+    async def cog_unload(self):
+        self.spawn_pokemon.stop()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -166,9 +165,7 @@ class PokemonCog(commands.Cog):
         guild_id = message.guild.id
         if guild_id in self.wild_pokemon:
             # Pass message to that guild session
-            await self.wild_pokemon[guild_id].handle_message(
-                message, self.database
-            )
+            await self.wild_pokemon[guild_id].handle_message(message, self.database)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
@@ -193,9 +190,7 @@ class PokemonCog(commands.Cog):
         # Remove wild pokemon from that guild, if it exists
         self.wild_pokemon.pop(guild.id, None)
 
-    @group.command(
-        name="pokedex", description="See what Pokémon you've captured."
-    )
+    @group.command(name="pokedex", description="See what Pokémon you've captured.")
     async def pokedex(
         self, interaction: discord.Interaction, language: str = "en"
     ) -> None:
@@ -224,19 +219,13 @@ class PokemonCog(commands.Cog):
             return
 
         # Build pokedex & display
-        await interaction.response.send_message(
-            embed=discord.Embed(title="Pokédex")
-        )
-        view = Pokedex(
-            interaction.user, await interaction.original_response(), rows
-        )
+        await interaction.response.send_message(embed=discord.Embed(title="Pokédex"))
+        view = Pokedex(interaction.user, await interaction.original_response(), rows)
         await view.update_message()
 
     @group.command(
         name="enable",
-        description=(
-            "Set this channel for random Pokemon spawns in this server."
-        ),
+        description=("Set this channel for random Pokemon spawns in this server."),
     )
     async def enable(self, interaction: discord.Interaction) -> None:
         """Configure the spawn channel for a guild."""
@@ -393,3 +382,8 @@ class PokemonCog(commands.Cog):
             " NOT NULL"
         )
         return {row[0]: row[1] for row in rows}
+
+
+async def setup(bot):
+    data_path = os.getenv("DATA_PATH")
+    await bot.add_cog(PokemonCog(bot, database_path=data_path))
