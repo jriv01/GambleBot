@@ -9,7 +9,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
-from cogs.casino.casino_lib import Card, Deck, GameState
+from lib.casino.casino_lib import Card, Deck, GameState
 
 
 class Player:
