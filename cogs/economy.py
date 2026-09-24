@@ -6,21 +6,21 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from common.base_cog import BaseCog
 from common.database_utilities import SqliteDatabase
 
 DEFAULT_BALANCE = 1500
 
 
-class Economy(commands.Cog):
+class Economy(BaseCog):
     """A cog that implements economy functionality.
 
     Attributes:
-        bot: A discord bot client.
         database: A SqliteDatabase instance to query on.
     """
 
     def __init__(self, bot: commands.Bot, database_path: str):
-        self.bot = bot
+        super().__init__(bot)
         self.database = SqliteDatabase(database_path)
 
     @app_commands.command(name="funds", description="Check your funds.")

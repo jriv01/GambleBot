@@ -7,36 +7,26 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from common.casino_cog import CasinoCog
 from lib.casino.casino_lib import GameState
 from lib.casino.horse_racing_lib import HorseRacingSession
 
 
-class HorseRacingCog(commands.Cog):
+class HorseRacingCog(CasinoCog):
     """A cog that implements horse racing functionality.
 
     Attributes:
-        bot: A discord bot client.
-        economy: A discord.commands.Cog instance that manages player funds.
         pending_game_delay: Amount of time to wait before starting a game.
         guild_sessions: Map of guild ids to horse racing sessions.
         session_lock: Lock to acquire when handling sessions.
     """
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
         self.pending_game_delay = 10
 
         self.guild_sessions: dict[int, HorseRacingSession] = {}
         self.session_lock = threading.Lock()
-
-        self.economy = None
-
-    async def cog_load(self):
-        self.economy = self.bot.get_cog("Economy")
-        if not self.economy:
-            raise RuntimeError(
-                "Horseracing cog requires Economy cog to be loaded first"
-            )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -69,18 +59,7 @@ class HorseRacingCog(commands.Cog):
             bet: The amount to bet.
             horse: The horse to bet on.
         """
-        # Validate bet
-        # All bets must be non-negative & not greater than the users funds
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
+        if not await self.validate_bet(interaction, bet):
             return
 
         # Validate horse
@@ -123,6 +102,7 @@ class HorseRacingCog(commands.Cog):
                 else:
                     # Add new player to session
                     current_session.add_player(user, bet, horse)
+                    await self.economy.withdraw(user, bet)
                     await interaction.response.send_message(
                         f"{user.mention} has joined the race with a bet of"
                         f" {bet} on horse #{horse}!"

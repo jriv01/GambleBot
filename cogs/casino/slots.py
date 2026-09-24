@@ -7,6 +7,8 @@ import discord
 from discord import Color, app_commands
 from discord.ext import commands
 
+from common.casino_cog import CasinoCog
+
 
 class Symbol:
     """A slots symbol.
@@ -38,13 +40,8 @@ class Symbol:
         return int(bet * self.multiplier)
 
 
-class SlotsCog(commands.Cog):
-    """A cog that implements slots functionality.
-
-    Attributes:
-        bot: A discord bot client.
-        economy_cog: A commands.Cog instance for managing player funds.
-    """
+class SlotsCog(CasinoCog):
+    """A cog that implements slots functionality."""
 
     # List of all possible symbols
     symbols = [
@@ -100,15 +97,9 @@ class SlotsCog(commands.Cog):
     ]
 
     def __init__(self, bot: commands.Bot):
-        self.bot = bot
+        super().__init__(bot)
         self.num_symbols = 7
         self.active_sessions = set()
-        self.economy = None
-
-    async def cog_load(self):
-        self.economy = self.bot.get_cog("Economy")
-        if not self.economy:
-            raise RuntimeError("Slots cog requires Economy cog to be loaded first")
 
     @app_commands.command(name="slots", description="...")
     async def slots(self, interaction: discord.Interaction, bet: int) -> None:
@@ -119,16 +110,7 @@ class SlotsCog(commands.Cog):
             bet: Amount user wishes to bet.
         """
         # Validate bet
-        if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
-        has_funds = await self.economy.validate_funds(interaction.user, bet)
-        if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
-            )
+        if not await self.validate_bet(interaction, bet):
             return
 
         # Check if user is already spinning the wheel

@@ -8,17 +8,16 @@ from typing import Literal, Optional
 
 from discord.ext import commands
 
+from common.base_cog import BaseCog
 
-class AdminCog(commands.Cog):
+
+class AdminCog(BaseCog):
     """
     Cog implementing administrative commands.
 
     Attributes:
         bot: A discord bot client.
     """
-
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
 
     async def cog_check(  # pylint: disable=invalid-overridden-method
         self, ctx: commands.Context
