@@ -17,7 +17,7 @@ class Dice(BaseCasinoCog):
         """Slash command for rolling dice.
 
         Args:
-            interation: Discord interaction to handle.
+            interaction: Discord interaction to handle.
             bet: The amount user wishes to bet.
         """
         if not await self.validate_bet(interaction, bet):

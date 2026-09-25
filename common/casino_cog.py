@@ -1,3 +1,5 @@
+"""Base cog implementations for singleplayer and multiple casino games."""
+
 import asyncio
 from typing import Any
 
@@ -5,13 +7,22 @@ import discord
 from discord.ext import commands
 
 from common.base_cog import BaseCog
-from lib.casino.casino_lib import GameSession, GameState
+from lib.casino.casino_lib import GameSession, GameState, Player
 
 
 class BaseCasinoCog(BaseCog):
+    """Base cog class providing common logic for Casino cogs."""
 
     async def validate_bet(self, interaction: discord.Interaction, bet: int) -> bool:
-        """Validate that a player bet is non-negative and available."""
+        """Validate that a player bet is non-negative and available.
+
+        Args:
+            interaction: Discord interaction to handle.
+            bet: The amount to bet.
+
+        Returns:
+            True if the bet is valid, False otherwise.
+        """
         if bet < 0:
             await interaction.response.send_message(
                 "Bets must be at least 0 gold.", ephemeral=True
@@ -29,19 +40,41 @@ class BaseCasinoCog(BaseCog):
 
 
 class MultiplayerCasinoCog(BaseCasinoCog):
+    """Cog providing common logic for multiplayer Casino cogs."""
 
     def __init__(self, bot: commands.Bot, pending_game_delay: int):
         super().__init__(bot)
         self.pending_game_delay = pending_game_delay
         self.guild_sessions: dict[int, Any] = {}
 
-    def register_session(self, guild: discord.Guild, session: type[GameSession]):
+    def register_session(
+        self, guild: discord.Guild, session: type[GameSession]
+    ) -> None:
+        """Register an active game session for a guild.
+
+        Args:
+            guild: The guild to register the session in.
+            session: The session instance to register.
+        """
         self.guild_sessions[guild.id] = session
 
-    def get_session(self, guild: discord.Guild) -> GameSession:
+    def get_session(self, guild: discord.Guild) -> GameSession | None:
+        """Get the active game session for a guild.
+
+        Args:
+            guild: The guild to retrieve the session for.
+
+        Returns:
+            The active GameSession, or None if no session exists.
+        """
         return self.guild_sessions.get(guild.id, None)
 
-    def destroy_session(self, guild: discord.Guild):
+    def destroy_session(self, guild: discord.Guild) -> None:
+        """Remove and clean up the active session for a guild.
+
+        Args:
+            guild: The guild whose session should be removed.
+        """
         self.guild_sessions.pop(guild.id)
 
     async def handle_session_entry(
@@ -52,7 +85,18 @@ class MultiplayerCasinoCog(BaseCasinoCog):
         game_name: str,
         game_command: str,
         player_kwargs: dict | None = None,
-    ):
+    ) -> None:
+        """
+        Handle player entry into a new or pending game session.
+
+        Args:
+            interaction: Discord interaction to respond to.
+            bet: Amount bet by the player.
+            session_cls: Game session class to instantiate.
+            game_name: Name of the game being played.
+            game_command: Slash command used to join the game.
+            player_kwargs: Additional keyword arguments for player setup.
+        """
         # Interaction variables
         user = interaction.user
         guild = interaction.guild
@@ -78,7 +122,7 @@ class MultiplayerCasinoCog(BaseCasinoCog):
             # Check if user is already part of session
             if user in current_session:
                 await interaction.response.send_message(
-                    "You are already part of this race!", ephemeral=True
+                    "You are already part of this game!", ephemeral=True
                 )
             else:
                 # Add new player to session
@@ -95,7 +139,15 @@ class MultiplayerCasinoCog(BaseCasinoCog):
             )
             return
 
-    async def run_game_cycle(self, guild: discord.Guild, channel: discord.TextChannel):
+    async def run_game_cycle(
+        self, guild: discord.Guild, channel: discord.TextChannel
+    ) -> None:
+        """Execute and manage the game loop.
+
+        Args:
+            guild: The guild hosting the game.
+            channel: Discord channel where the game output is posted.
+        """
         # Sleep & give players time to join game
         current_session = self.get_session(guild)
         await asyncio.sleep(self.pending_game_delay - 5)
@@ -118,9 +170,9 @@ class MultiplayerCasinoCog(BaseCasinoCog):
     async def display_results(
         self,
         channel: discord.TextChannel,
-        winners: list,
-        losers: list,
-        ties: list,
+        winners: list[Player],
+        losers: list[Player],
+        ties: list[Player],
     ) -> None:
         """Display results of a session.
 

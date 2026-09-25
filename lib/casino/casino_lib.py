@@ -41,6 +41,14 @@ class GameState(enum.Enum):
 
 
 class GameSession(ABC):
+    """Abstract base class representing a multiplayer game session.
+
+    Attributes:
+        bot: Discord bot instance.
+        text_channel: The text channel where the session is active.
+        players: Set of active players in this session.
+        game_state: Current state of the game session.
+    """
 
     def __init__(self, bot: commands.Bot, text_channel: discord.TextChannel):
         self.bot = bot
@@ -52,6 +60,17 @@ class GameSession(ABC):
         return any(user.id == player.user.id for player in self.players)
 
     def add_player(self, user: discord.User, bet: int, **kwargs) -> bool:
+        """
+        Add a player to the session if not already present.
+
+        Args:
+            user: Discord iser to add.
+            bet: The player's bet amount.
+            **kwargs: Additional game-specific player properties
+
+        Returns:
+            True if the player was added, False if already present.
+        """
         if user in self:
             return False
         self.players.add(Player(user, bet, **kwargs))
@@ -59,7 +78,11 @@ class GameSession(ABC):
 
     @abstractmethod
     async def play_game(self) -> tuple[list[Player], list[Player], list[Player]]:
-        pass
+        """Execute gamel logic and evaluate winners, losers, and ties.
+
+        Returns:
+            A tuple of (winners, losers, ties) player lists.
+        """
 
 
 class Card:

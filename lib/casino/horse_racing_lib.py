@@ -1,7 +1,7 @@
 """Horse racing library.
 
-Implements functions & classes for using executing a horse racing session &
-display excecution to users.
+Implements functions & classes for executing a horse racing session &
+display execution to users.
 """
 
 import asyncio
@@ -27,7 +27,7 @@ class Horse:
 
         Args:
             number: Number assigned to this horse.
-            tack_length: Length of the track.
+            track_length: Length of the track.
         """
         self.number = number
         self.track_length = track_length
@@ -73,7 +73,7 @@ class HorseRacingSession(GameSession):
         self.do_sticky = False
 
     async def play_game(self) -> tuple[list[Player], list[Player], list[Player]]:
-        """Run the horse race".
+        """Run the horse race.
 
         Returns:
             A tuple of 3 lists, in the format ([WINNING PLAYERS],
@@ -110,7 +110,7 @@ class HorseRacingSession(GameSession):
         # Keep running until one horse has won
         winning_horse = None
         while not winning_horse:
-            # Pick a random horse to advance by a random amount, [1,3]
+            # Pick a random horse to advance by a random amount, [4,6]
             horse = random.choice(horses)
             horse.advance(random.randint(4, 6))
 
@@ -119,7 +119,7 @@ class HorseRacingSession(GameSession):
                 winning_horse = horse
 
             # Check whether to resend the message
-            # Avoids the editted messages scrolling up
+            # Avoids the edited messages scrolling up
             display = self.get_display(horses)
             if self.do_sticky:
                 # Delete & replace the message

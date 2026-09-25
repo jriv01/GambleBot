@@ -1,4 +1,4 @@
-"""Cog that implements creation and management of horse racing sessions."""
+"""Cog that implements horse racing."""
 
 import discord
 from discord import app_commands
@@ -41,7 +41,7 @@ class HorseRacingCog(MultiplayerCasinoCog):
     async def horse_race(
         self, interaction: discord.Interaction, bet: int, horse: int
     ) -> None:
-        """Slash command for beginning or joining a blackjack game.
+        """Slash command for beginning or joining a horse racing game.
 
         Args:
             interaction: Discord interaction to handle.

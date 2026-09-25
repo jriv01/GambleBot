@@ -1,7 +1,7 @@
 """Blackjack library.
 
-Implements functions & classes for using executing a blackjack session &
-display excecution to users.
+Implements functions & classes for executing a blackjack session &
+display execution to users.
 """
 
 import asyncio
@@ -200,7 +200,7 @@ class BlackjackSession(GameSession):
             await message.edit(content=message_content)
             await asyncio.sleep(self.message_delay)
 
-    async def send_pending_message(self, content) -> None:
+    async def send_pending_message(self, content: str) -> None:
         """Send a message that gives the appearance of something loading.
 
         Args:
@@ -219,7 +219,7 @@ class BlackjackSession(GameSession):
         """Get string representation of blackjack hand.
 
         Args:
-            hand: A blackhack hand.
+            hand: A blackjack hand.
 
         Returns:
             String representation of a blackjack hand.

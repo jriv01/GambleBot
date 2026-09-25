@@ -176,7 +176,7 @@ class SlotsCog(BaseCasinoCog):
             active_symbols: Symbols currently visible in wheel.
             message: Discord message to edit.
 
-        Returns
+        Returns:
             The symbol that was landed on.
         """
         # Variables for cycling through symbols
