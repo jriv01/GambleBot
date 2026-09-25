@@ -6,7 +6,6 @@ import asyncio
 import logging
 import os
 
-import discord
 import dotenv
 
 from core.bot import Client
@@ -17,10 +16,7 @@ async def main():
 
     dotenv.load_dotenv()
 
-    intents = discord.Intents.default()
-    intents.message_content = True
-
-    client = Client(command_prefix="h!", intents=intents)
+    client = Client()
 
     logging.basicConfig(level=logging.INFO)
 

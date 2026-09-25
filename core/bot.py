@@ -1,17 +1,32 @@
+"""Main client implementation."""
+
 import logging
+import os
 import sys
 import traceback
 from itertools import cycle
 from pathlib import Path
+from typing import Optional
 
 import discord
 from discord.ext import commands, tasks
+
+from common.database_utilities import AsyncSqliteDatabase
 
 possible_status = cycle(["Poker", "Blackjack", "Roulette"])
 
 
 class Client(commands.Bot):
     """Main client that joins cogs together"""
+
+    def __init__(
+        self, command_prefix: str = "h!", intents: Optional[discord.Intents] = None
+    ):
+        if intents is None:
+            intents = discord.Intents.default()
+            intents.message_content = True
+        super().__init__(command_prefix=command_prefix, intents=intents)
+        self.db = AsyncSqliteDatabase(os.getenv("DATA_PATH"))
 
     async def on_ready(self):
         """Listen for when client is ready."""
@@ -21,7 +36,12 @@ class Client(commands.Bot):
 
     async def setup_hook(self):
         self.tree.on_error = self.on_app_command_error
+        await self.db.connect()
         await self.load_extensions()
+
+    async def close(self):
+        await self.db.close()
+        await super().close()
 
     @tasks.loop(seconds=180)
     async def change_bot_status(self):

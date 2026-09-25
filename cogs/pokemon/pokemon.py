@@ -9,8 +9,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from common.database_utilities import SqliteDatabase
+from common.base_cog import BaseCog
+from common.database_utilities import AsyncSqliteDatabase
 from common.paginator import Paginator
+from core.bot import Client
 from lib.pokemon.pokemon_api_wrapper import Pokemon, PokemonApiWrapper
 
 NUM_POKEMON = 1025
@@ -39,7 +41,7 @@ class WildPokemon:
         return self.pokemon.name
 
     async def handle_message(
-        self, message: discord.Message, database: SqliteDatabase
+        self, message: discord.Message, database: AsyncSqliteDatabase
     ) -> None:
         """Handle incoming message & check if pokemon is caught.
 
@@ -59,7 +61,7 @@ class WildPokemon:
             self.is_caught = True
 
         # Connect to database & check if this pokemon is owned already
-        res = database.execute_query(
+        res = await database.execute_query(
             "SELECT num_owned FROM `Pokemon.UserCollections` WHERE"
             " pokemon_name = ? AND language = ?",
             self.pokemon.name,
@@ -68,7 +70,7 @@ class WildPokemon:
 
         # Add entry if not owned
         if not res:
-            database.execute_query(
+            await database.execute_query(
                 "INSERT INTO `Pokemon.UserCollections` (user_id, user_name,"
                 " pokemon_name, language, pokedex_number, num_owned) VALUES"
                 " (?,?,?,?,?,?)",
@@ -80,7 +82,7 @@ class WildPokemon:
                 1,
             )
         else:  # Update entry otherwise
-            database.execute_query(
+            await database.execute_query(
                 "UPDATE `Pokemon.UserCollections` SET num_owned = ? WHERE"
                 " user_id = ? AND pokemon_name = ? AND language = ?",
                 res[0][0] + 1,  # Get first row
@@ -121,11 +123,10 @@ class Pokedex(Paginator):
         return f"#{dex_number.zfill(4)}: {name}"
 
 
-class PokemonCog(commands.Cog):
+class PokemonCog(BaseCog):
     """A cog that implements pokemon functionality.
 
     Attributes:
-        bot: A discord bot client
         database: A SqliteDatabase instance to query on.
         poke_api: Poke API V2 wrapper instance.
         wild_pokemon: Mapping of guild ids to wild pokemon.
@@ -135,9 +136,8 @@ class PokemonCog(commands.Cog):
     # Group for all pokemon related slash commands.
     group = app_commands.Group(name="pokemon", description="Pokemon related commands")
 
-    def __init__(self, bot: commands.Bot, database_path: str):
-        self.bot = bot
-        self.database = SqliteDatabase(database_path)
+    def __init__(self, bot: Client):
+        super().__init__(bot)
 
         # Pokemon API wrapper
         self.poke_api = PokemonApiWrapper()
@@ -165,13 +165,13 @@ class PokemonCog(commands.Cog):
         guild_id = message.guild.id
         if guild_id in self.wild_pokemon:
             # Pass message to that guild session
-            await self.wild_pokemon[guild_id].handle_message(message, self.database)
+            await self.wild_pokemon[guild_id].handle_message(message, self.bot.db)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
         """Action to take when a new guild is joined."""
         # Add empty channel registry to database
-        self.database.execute_query(
+        await self.bot.db.execute_query(
             "INSERT INTO `Pokemon.GuildConfigurations` (guild_id, channel_id)"
             " VALUES (?,?)",
             guild.id,
@@ -182,7 +182,7 @@ class PokemonCog(commands.Cog):
     async def on_guild_remove(self, guild: discord.Guild):
         """Action to take when a guild is left."""
         # Remove guild's entry from database
-        self.database.execute_query(
+        await self.bot.db.execute_query(
             "DELETE FROM `Pokemon.GuildConfigurations` WHERE guild_id = ?",
             guild.id,
         )
@@ -204,7 +204,7 @@ class PokemonCog(commands.Cog):
         language = language.lower()[:2]
 
         # Fetch a user's collection of captured pokemon
-        rows = self.database.execute_query(
+        rows = await self.bot.db.execute_query(
             "SELECT pokedex_number, pokemon_name FROM `Pokemon.UserCollections`"
             " WHERE user_id = ? AND language = ? ORDER BY pokedex_number",
             interaction.user.id,
@@ -233,8 +233,8 @@ class PokemonCog(commands.Cog):
         channel = interaction.channel
 
         # Set the new spawn channel for this guild
-        self.database.execute_query(
-            "UPDATE `Pokemon.GuileConfigurations` SET channel_id = ? WHERE"
+        await self.bot.db.execute_query(
+            "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
             " guild_id = ?",
             channel.id,
             guild.id,
@@ -253,7 +253,7 @@ class PokemonCog(commands.Cog):
         guild = interaction.guild
 
         # Unset spawn channel for this guild
-        self.database.execute_query(
+        await self.bot.db.execute_query(
             "UPDATE `Pokemon.GuildConfigurations` SET channel_id = ? WHERE"
             " guild_id = ?",
             None,
@@ -288,7 +288,7 @@ class PokemonCog(commands.Cog):
         embed.set_image(url=artwork_url)
 
         # Get all configured guilds
-        configured_guilds = self.get_configured_guilds()
+        configured_guilds = await self.get_configured_guilds()
         for guild_id, channel_id in configured_guilds.items():
             # Create capturable pokemon
             self.wild_pokemon[guild_id] = WildPokemon(pokemon)
@@ -371,19 +371,18 @@ class PokemonCog(commands.Cog):
         # Remove pokemon from memory
         self.wild_pokemon.pop(ctx.guild.id, None)
 
-    def get_configured_guilds(self) -> dict[int, int]:
+    async def get_configured_guilds(self) -> dict[int, int]:
         """Get all configured guilds.
 
         Returns:
             A map of guild ids to their registered channel ids.
         """
-        rows = self.database.execute_query(
+        rows = await self.bot.db.execute_query(
             "SELECT * FROM `Pokemon.GuildConfigurations` WHERE channel_id IS"
             " NOT NULL"
         )
         return {row[0]: row[1] for row in rows}
 
 
-async def setup(bot):
-    data_path = os.getenv("DATA_PATH")
-    await bot.add_cog(PokemonCog(bot, database_path=data_path))
+async def setup(bot: Client):
+    await bot.add_cog(PokemonCog(bot))
