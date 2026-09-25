@@ -29,21 +29,33 @@ class AdminCog(BaseCog):
     async def sync(
         self,
         ctx: commands.Context,
-        spec: Optional[Literal["guild", "global"]] = "global",
+        spec: Optional[Literal["guild", "global", "clear", "global_clear"]] = "guild",
     ) -> None:
         """Sync application commands globally or to the current guild."""
-        async with ctx.typing():
-            if spec == "guild":
-                if ctx.guild is None:
-                    await ctx.reply("Cannot sync to 'guild' inside Direct Messages.")
-                    return
 
-                self.bot.tree.copy_global_to(guild=ctx.guild)
-                synced = await self.bot.tree.sync(guild=ctx.guild)
-                res = f"Synced {len(synced)} command(s) to **{ctx.guild.name}**."
-            else:
-                synced = await self.bot.tree.sync()
-                res = f"Synced {len(synced)} command(s) globally."
+        if spec in ("guild", "clear") and ctx.guild is None:
+            await ctx.reply(
+                "Guild operations cannot be performed inside Direct Messages."
+            )
+            return
+
+        async with ctx.typing():
+            match spec:
+                case "guild":
+                    self.bot.tree.copy_global_to(guild=ctx.guild)
+                    synced = await self.bot.tree.sync(guild=ctx.guild)
+                    res = f"Synced {len(synced)} command(s) to **{ctx.guild.name}**."
+                case "clear":
+                    self.bot.tree.clear_commands(guild=ctx.guild)
+                    await self.bot.tree.sync(guild=ctx.guild)
+                    res = f"Cleared all slash commands from **{ctx.guild.name}**."
+                case "global":
+                    synced = await self.bot.tree.sync()
+                    res = f"Synced {len(synced)} command(s) globally."
+                case "global_clear":
+                    self.bot.tree.clear_commands(guild=None)
+                    await self.bot.tree.sync()
+                    res = "Cleared all global slash commands."
 
         logging.info("[%s] %s", ctx.author, res)
         await ctx.reply(res)
