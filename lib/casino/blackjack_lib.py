@@ -1,7 +1,7 @@
 """Blackjack library.
 
-Implements functions & classes for using executing a blackjack session &
-display excecution to users.
+Implements functions & classes for executing a blackjack session &
+display execution to users.
 """
 
 import asyncio
@@ -9,86 +9,30 @@ import asyncio
 import discord
 from discord.ext import commands
 
-from lib.casino.casino_lib import Card, Deck, GameState
+from lib.casino.casino_lib import Card, Deck, GameSession, GameState, Player
 
 
-class Player:
-    """A blackjack player
-
-    Attributes:
-        user: A discord user.
-        bet: The amount the user bet.
-        hand: The user's hand of cards.
-    """
-
-    def __init__(self, user: discord.User, bet: int, hand: list[Card] = None):
-        self.user = user
-        self.bet = bet
-        self.hand = hand
-
-    @property
-    def mention(self):
-        """Discord @ mention"""
-        return self.user.mention
-
-
-class BlackjackSession:
+class BlackjackSession(GameSession):
     """A guild session for blackjack.
 
     Attributes:
         bot: A discord bot client.
-        game_state: The state of the session.
-        players: Set of all players in the session.
         text_channel: The channel the session is taking place in.
         message_delay: The time to wait between sending messages.
     """
 
-    def __init__(self, bot: commands.Bot, channel: discord.TextChannel):
-        self.bot = bot
-        self.game_state = GameState.GAME_PENDING
-        self.players = set()  # Set of players in the game
-        self.text_channel: discord.TextChannel = channel
+    def __init__(self, bot: commands.Bot, text_channel: discord.TextChannel):
+        super().__init__(bot, text_channel)
         self.message_delay = 2  # Seconds
 
-    def __contains__(self, user: discord.User) -> bool:
-        """Check if a user is already in the session.
-
-        Args:
-            user: User to check for.
-
-        Returns:
-            Whether the user is already in the session.
-        """
-        return any(user.id == player.user.id for player in self.players)
-
-    def add_player(self, user: discord.User, bet: int) -> bool:
-        """Add a user to this session.
-
-        Args:
-            user: Discord user to add.
-            bet: The amount the user bet.
-
-        Returns:
-            Whether or not the player was successfully added to the session.
-        """
-        # Check if the user can be added
-        if user in self:
-            return False
-
-        # Add the user
-        self.players.add(Player(user, bet))
-        return True
-
-    async def play_game(
-        self,
-    ) -> tuple[list[Player], list[Player], list[Player]]:
+    async def play_game(self) -> tuple[list[Player], list[Player], list[Player]]:
         """Play a game of blackjack.
 
         Returns:
             A tuple of 3 lists, in the format ([WINNING PLAYERS],
                 [LOSING PLAYERS], [TIED PLAYERS])
         """
-        self.game_state = GameState.GAME_STARTED
+        self.game_state = GameState.GAME_IN_PROGRESS
         await self.text_channel.send("Blackjack starting!")
 
         # Initialize the deck
@@ -256,7 +200,7 @@ class BlackjackSession:
             await message.edit(content=message_content)
             await asyncio.sleep(self.message_delay)
 
-    async def send_pending_message(self, content) -> None:
+    async def send_pending_message(self, content: str) -> None:
         """Send a message that gives the appearance of something loading.
 
         Args:
@@ -275,7 +219,7 @@ class BlackjackSession:
         """Get string representation of blackjack hand.
 
         Args:
-            hand: A blackhack hand.
+            hand: A blackjack hand.
 
         Returns:
             String representation of a blackjack hand.

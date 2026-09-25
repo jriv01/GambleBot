@@ -7,7 +7,7 @@ import discord
 from discord import Color, app_commands
 from discord.ext import commands
 
-from common.casino_cog import CasinoCog
+from common.casino_cog import BaseCasinoCog
 
 
 class Symbol:
@@ -40,7 +40,7 @@ class Symbol:
         return int(bet * self.multiplier)
 
 
-class SlotsCog(CasinoCog):
+class SlotsCog(BaseCasinoCog):
     """A cog that implements slots functionality."""
 
     # List of all possible symbols
@@ -176,7 +176,7 @@ class SlotsCog(CasinoCog):
             active_symbols: Symbols currently visible in wheel.
             message: Discord message to edit.
 
-        Returns
+        Returns:
             The symbol that was landed on.
         """
         # Variables for cycling through symbols

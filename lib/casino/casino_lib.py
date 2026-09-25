@@ -2,8 +2,33 @@
 elements.
 """
 
+import dataclasses
 import enum
 import random
+from abc import ABC, abstractmethod
+
+import discord
+from discord.ext import commands
+
+
+class Player:
+    """A player
+
+    Attributes:
+        user: A discord user.
+        bet: The amount the user bet.
+    """
+
+    def __init__(self, user: discord.User, bet: int, **kwargs):
+        self.user = user
+        self.bet = bet
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    @property
+    def mention(self):
+        """Discord @ mention"""
+        return self.user.mention
 
 
 class GameState(enum.Enum):
@@ -11,7 +36,53 @@ class GameState(enum.Enum):
 
     NO_GAME = 0
     GAME_PENDING = 1
-    GAME_STARTED = 2
+    GAME_IN_PROGRESS = 2
+    GAME_COMPLETED = 3
+
+
+class GameSession(ABC):
+    """Abstract base class representing a multiplayer game session.
+
+    Attributes:
+        bot: Discord bot instance.
+        text_channel: The text channel where the session is active.
+        players: Set of active players in this session.
+        game_state: Current state of the game session.
+    """
+
+    def __init__(self, bot: commands.Bot, text_channel: discord.TextChannel):
+        self.bot = bot
+        self.text_channel = text_channel
+        self.players = set()
+        self.game_state = GameState.GAME_PENDING
+
+    def __contains__(self, user: discord.User) -> bool:
+        return any(user.id == player.user.id for player in self.players)
+
+    def add_player(self, user: discord.User, bet: int, **kwargs) -> bool:
+        """
+        Add a player to the session if not already present.
+
+        Args:
+            user: Discord iser to add.
+            bet: The player's bet amount.
+            **kwargs: Additional game-specific player properties
+
+        Returns:
+            True if the player was added, False if already present.
+        """
+        if user in self:
+            return False
+        self.players.add(Player(user, bet, **kwargs))
+        return True
+
+    @abstractmethod
+    async def play_game(self) -> tuple[list[Player], list[Player], list[Player]]:
+        """Execute gamel logic and evaluate winners, losers, and ties.
+
+        Returns:
+            A tuple of (winners, losers, ties) player lists.
+        """
 
 
 class Card:

@@ -42,13 +42,13 @@ class Income(BaseCog):
                 self.pending_counts[user] = 0
             self.pending_counts[user] += 1
 
-    @tasks.loop(seconds=600)
+    @tasks.loop(seconds=300)
     async def direct_deposit(self) -> None:
-        """Deposit into user funds every 10 minutes"""
+        """Deposit into user funds every 5 minutes"""
         # Deposit according to number of user messages
         with self.lock:
             for user, count in self.pending_counts.items():
-                await self.economy.deposit(user, count * 5)
+                await self.economy.deposit(user, count * 50)
             self.pending_counts = {}
 
 
