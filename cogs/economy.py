@@ -1,27 +1,16 @@
 """Cog that implements an economy."""
 
-import os
-
 import discord
 from discord import app_commands
-from discord.ext import commands
 
 from common.base_cog import BaseCog
-from common.database_utilities import SqliteDatabase
+from core.bot import Client
 
 DEFAULT_BALANCE = 1500
 
 
 class Economy(BaseCog):
-    """A cog that implements economy functionality.
-
-    Attributes:
-        database: A SqliteDatabase instance to query on.
-    """
-
-    def __init__(self, bot: commands.Bot, database_path: str):
-        super().__init__(bot)
-        self.database = SqliteDatabase(database_path)
+    """A cog that implements economy functionality."""
 
     @app_commands.command(name="funds", description="Check your funds.")
     async def funds(self, interaction: discord.Interaction) -> None:
@@ -132,7 +121,7 @@ class Economy(BaseCog):
         new_funds = current_funds + delta
 
         # Update user funds
-        self.database.execute_query(
+        await self.bot.db.execute_query(
             "UPDATE `Economy.UserBank` SET balance = ? WHERE user_id = ?",
             new_funds,
             user.id,
@@ -148,14 +137,14 @@ class Economy(BaseCog):
             The user's balance.
         """
         # Get the user's funds
-        result = self.database.execute_query(
+        result = await self.bot.db.execute_query(
             "SELECT balance FROM `Economy.UserBank` WHERE user_id = ?",
             user.id,
         )
 
         # Insert user is they don't already exist
         if not result:
-            self.database.execute_query(
+            await self.bot.db.execute_query(
                 "INSERT INTO `Economy.UserBank` (user_id, user_name,"
                 " balance) VALUES (?,?,?)",
                 user.id,
@@ -169,6 +158,5 @@ class Economy(BaseCog):
         return balance
 
 
-async def setup(bot):
-    data_path = os.getenv("DATA_PATH")
-    await bot.add_cog(Economy(bot, database_path=data_path))
+async def setup(bot: Client):
+    await bot.add_cog(Economy(bot))
