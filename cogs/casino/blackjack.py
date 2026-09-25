@@ -1,11 +1,11 @@
-"""Cog that implements blackjack."""
+"""Cog that implements blackjack commands."""
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from common.casino_cog import MultiplayerCasinoCog
-from lib.casino.blackjack_lib import BlackjackSession
+from services.blackjack_session import BlackjackSession
 
 
 class Blackjack(MultiplayerCasinoCog):

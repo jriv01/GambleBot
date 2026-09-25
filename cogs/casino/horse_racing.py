@@ -5,7 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from common.casino_cog import MultiplayerCasinoCog
-from lib.casino.horse_racing_lib import HorseRacingSession
+from services.horse_racing_session import HorseRacingSession
 
 
 class HorseRacingCog(MultiplayerCasinoCog):

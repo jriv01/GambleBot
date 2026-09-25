@@ -1,249 +1,28 @@
 """Blackjack library.
 
-Implements functions & classes for executing a blackjack session &
-display execution to users.
+Implements classes for driving a game of blackjack.
 """
 
-import asyncio
+from typing import Optional
 
-import discord
-from discord.ext import commands
-
-from lib.casino.casino_lib import Card, Deck, GameSession, GameState, Player
+from lib.casino.casino_lib import Card, Deck, Player
 
 
-class BlackjackSession(GameSession):
-    """A guild session for blackjack.
+class BlackjackHand:
+    """A hand of cards in blackjack."""
 
-    Attributes:
-        bot: A discord bot client.
-        text_channel: The channel the session is taking place in.
-        message_delay: The time to wait between sending messages.
-    """
+    def __init__(self, hand: Optional[list[Card]] = None):
+        self.hand = hand or []
 
-    def __init__(self, bot: commands.Bot, text_channel: discord.TextChannel):
-        super().__init__(bot, text_channel)
-        self.message_delay = 2  # Seconds
-
-    async def play_game(self) -> tuple[list[Player], list[Player], list[Player]]:
-        """Play a game of blackjack.
-
-        Returns:
-            A tuple of 3 lists, in the format ([WINNING PLAYERS],
-                [LOSING PLAYERS], [TIED PLAYERS])
-        """
-        self.game_state = GameState.GAME_IN_PROGRESS
-        await self.text_channel.send("Blackjack starting!")
-
-        # Initialize the deck
-        deck = Deck(num_decks=2)
-        deck.shuffle()
-
-        await self.send_pending_message("Dealing cards")
-
-        # Draw cards for each player
-        for player in self.players:
-            hand = [deck.draw_card(), deck.draw_card()]
-            player.hand = hand
-
-        # Get dealer hand
-        dealer_hand = [deck.draw_card(), deck.draw_card()]
-
-        # Play each players turn
-        for player in self.players:
-            await self.player_turn(player, deck, dealer_hand[-1])
-            await asyncio.sleep(self.message_delay)
-
-        # Play the dealer turn
-        await self.dealer_turn(dealer_hand, deck)
-        dealer_value = self.get_hand_value(dealer_hand)
-
-        # Get winners, losers, and ties
-        winners, losers, ties = [], [], []
-        for player in self.players:
-            player_value = self.get_hand_value(player.hand)
-            if (
-                player_value > 21 or player_value < dealer_value < 22
-            ):  # Busted or less than dealer
-                losers.append(player)
-            elif (
-                player_value > dealer_value or dealer_value > 21
-            ):  # More than dealer or dealer busted
-                winners.append(player)
-            else:  # Both busted or both same score
-                ties.append(player)
-
-        return winners, losers, ties
-
-    async def player_turn(self, player: Player, deck: Deck, dealer_card: Card) -> None:
-        """Go through a players turn of blackjack.
-
-        Args:
-            player: A player whose turn to play.
-            deck: The deck of cards to play.
-            dealer_card: Dealer card that is being shown.
-        """
-        # Get starting hand
-        hand = player.hand
-        hand_value = self.get_hand_value(hand)
-        hand_display = self.get_hand_display(hand)
-        action = ""
-
-        # Show players hand & options
-        message_content = "=" * 30 + "\n"
-        message_content += f"[ CURRENT TURN: {player.mention} ]\n\n"
-        message_content += "The dealer is currently showing...\n\t"
-        message_content += (
-            f"{dealer_card.emoji} {dealer_card} for a value of"
-            f" {dealer_card.get_value()}\n\n"
-        )
-        message_content += (
-            f"You drew a hand of... {hand_display}\nFor a value of" f" {hand_value}."
-        )
-        message_content += (
-            "\n\nWould you like to HIT or STAND?" if hand_value != 21 else ""
-        )
-        message_content += "\n" + "=" * 30
-        await self.text_channel.send(message_content)
-
-        # Play until player busts or stands
-        while hand_value < 21 and action not in ("STAND", "S"):
-            try:
-                response = await self.bot.wait_for(
-                    "message",
-                    check=(lambda message: message.author.id == player.user.id),
-                    timeout=30,
-                )
-            except asyncio.TimeoutError:
-                await self.text_channel.send(
-                    f"{player.mention} took too long to reply! Their turn is" " over."
-                )
-                break
-
-            # Parse player response
-            action = response.content.strip().upper()
-            if action not in ("HIT", "H"):
-                continue
-
-            # If player hit, then draw card
-            new_card = deck.draw_card()
-            hand.append(new_card)
-            hand_value = self.get_hand_value(hand)
-            hand_display = self.get_hand_display(hand)
-
-            # Show player outcome and options
-            message_content = "=" * 30 + "\n"
-            message_content += f"[ CURRENT TURN: {player.mention} ]\n\n"
-            message_content += f"You drew {new_card.emoji} {new_card}\n\n"
-            message_content += "The dealer is currently showing...\n\t"
-            message_content += (
-                f"{dealer_card.emoji} {dealer_card} for a value of"
-                f" {dealer_card.get_value()}\n\n"
-            )
-            if hand_value < 21:
-                message_content += (
-                    f"You currently have a hand of... {hand_display}\n"
-                    f"For a value of {hand_value}.\n\n"
-                )
-                message_content += "Would you like to HIT or STAND?"
-            elif hand_value > 21:
-                message_content += "You busted!"
-            message_content += "\n" + "=" * 30
-
-            await self.text_channel.send(message_content.strip())
-
-    async def dealer_turn(self, hand: list[Card], deck: Deck) -> None:
-        """Go through the dealer's turn of blackjack.
-
-        Play a full dealers turn, until the dealer can no longer draw cards.
-        The dealers hand is mutated as cards are drawn.
-
-        Args:
-            hand: The dealer's hand.
-            deck: The deck of cards.
-        """
-        # Show dealers full hand and value
-        dealer_display = self.get_hand_display(hand)
-        dealer_value = self.get_hand_value(hand)
-        await self.send_pending_message("Revealing dealer hand")
-        message_content = "=" * 30 + "\n"
-        message_content += (
-            f"Dealer has drawn...{dealer_display}\nFor a value of" f" {dealer_value}."
-        )
-        message_content += "\n" + "=" * 30
-        message = await self.text_channel.send(message_content)
-        await asyncio.sleep(self.message_delay)
-
-        # Determine if there's at least one player beating the dealer
-        must_draw = False
-        for player in self.players:
-            player_value = self.get_hand_value(player.hand)
-            if dealer_value < player_value < 22:
-                must_draw = True
-
-        # Play the dealer's turn
-        while must_draw and dealer_value < 17:
-            # Draw a new card
-            new_card = deck.draw_card()
-            hand.append(new_card)
-            dealer_display = self.get_hand_display(hand)
-            dealer_value = self.get_hand_value(hand)
-
-            # Show the outcome
-            message_content = "=" * 30 + "\n"
-            message_content += f"Dealer drew {new_card.emoji} {new_card}."
-            message_content += (
-                f"\n\nDealer currently has a hand of... {dealer_display}\n"
-                f"For a value of {dealer_value}."
-            )
-            message_content += "\n" + "=" * 30
-            await message.edit(content=message_content)
-            await asyncio.sleep(self.message_delay)
-
-    async def send_pending_message(self, content: str) -> None:
-        """Send a message that gives the appearance of something loading.
-
-        Args:
-            content: Message content to send.
-        """
-        # Send initial message
-        message = await self.text_channel.send(content)
-
-        # Add dots periodically
-        for _ in range(5):
-            content += "."
-            await message.edit(content=content)
-            await asyncio.sleep(0.35)
-
-    def get_hand_display(self, hand: list[Card]) -> str:
-        """Get string representation of blackjack hand.
-
-        Args:
-            hand: A blackjack hand.
-
-        Returns:
-            String representation of a blackjack hand.
-        """
-        ret = ""
-        for card in hand:
-            ret += f"\n\t{card.emoji} {card}"
-        return ret
-
-    def get_hand_value(self, hand: list[Card]) -> int:
-        """Get integer value of a blackjack hand.
-
-        Args:
-            hand: A blackhack hand.
-
-        Returns:
-            The value of the hand.
-        """
+    @property
+    def value(self) -> int:
+        """Get integer value of a blackjack hand."""
         # Get number of aces & all non-ace cards
-        num_aces = len([card for card in hand if card.rank == "Ace"])
+        num_aces = len([card for card in self.hand if card.rank == "Ace"])
 
         # Get total of all cards, assuming high-aces
         total = 0
-        for card in hand:
+        for card in self.hand:
             total += card.get_value(high_aces=True)
 
         # Adjust ace values for maximum total score
@@ -252,3 +31,71 @@ class BlackjackSession(GameSession):
             num_aces -= 1
 
         return total
+
+    def is_busted(self) -> bool:
+        return self.value > 21
+
+    def add_card(self, card: Card) -> None:
+        """Add card to hand."""
+        self.hand.append(card)
+
+
+class BlackjackEngine:
+    """Engine driving the blackjack logic and state."""
+
+    def __init__(self, players: set[Player]):
+        self.players = players
+        self.deck = Deck(num_decks=2)
+
+        self.dealer_hand = BlackjackHand()
+
+    def initialize_game(self) -> None:
+        """Set up a game of blackjack"""
+        self.deck.shuffle()
+
+        for player in self.players:
+            player.hand = BlackjackHand([self.deck.draw_card(), self.deck.draw_card()])
+
+        self.dealer_hand.add_card(self.deck.draw_card())
+        self.dealer_hand.add_card(self.deck.draw_card())
+
+    def lost_to_dealer(self, hand: BlackjackHand) -> bool:
+        """Determine if a hand loses to the dealer."""
+        return not self.dealer_hand.is_busted() and hand.value < self.dealer_hand.value
+
+    def beat_dealer(self, hand: BlackjackHand) -> bool:
+        """Determine if a hand beats the dealer"""
+        return not hand.is_busted() and (
+            self.dealer_hand.is_busted() or hand.value > self.dealer_hand.value
+        )
+
+    def hit(self, hand: BlackjackHand) -> Card:
+        """Add a card to a Blackjack hand."""
+        new_card = self.deck.draw_card()
+        hand.add_card(new_card)
+        return new_card
+
+    def should_dealer_hit(self) -> bool:
+        """Determine if a dealer should hit."""
+        if all(player.hand.is_busted() for player in self.players):
+            return False
+
+        return self.dealer_hand.value < 17
+
+    def get_results(self) -> tuple[list[Player], list[Player], list[Player]]:
+        """Get game results.
+
+        Returns:
+            A tuple of format (winners, losers, draws)
+        """
+        winners, losers, draws = [], [], []
+
+        for player in self.players:
+            if player.hand.is_busted() or self.lost_to_dealer(player.hand):
+                losers.append(player)
+            elif self.beat_dealer(player.hand):
+                winners.append(player)
+            else:
+                draws.append(player)
+
+        return winners, losers, draws
