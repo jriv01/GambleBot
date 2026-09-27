@@ -24,19 +24,33 @@ class BaseCasinoCog(BaseCog):
             True if the bet is valid, False otherwise.
         """
         if bet < 0:
-            await interaction.response.send_message(
-                "Bets must be at least 0 gold.", ephemeral=True
-            )
-            return
+            await self.send_bet_error(interaction, "Bets must be at least 0 gold.")
+            return False
 
         has_funds = await self.economy.validate_funds(interaction.user, bet)
         if not has_funds:
-            await interaction.response.send_message(
-                "You do not have enough funds to make that bet!", ephemeral=True
+            await self.send_bet_error(
+                interaction, "You do not have enough funds to make that bet!"
             )
-            return
+            return False
 
         return True
+
+    async def send_bet_error(
+        self, interaction: discord.Interaction, message: str
+    ) -> None:
+        """Tell the player why their bet was refused, visible only to them.
+
+        Works whether or not the interaction has already been responded to.
+
+        Args:
+            interaction: Discord interaction to handle.
+            message: Reason the bet was refused.
+        """
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
 
 
 class MultiplayerCasinoCog(BaseCasinoCog):
