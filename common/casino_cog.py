@@ -1,17 +1,47 @@
 """Base cog implementations for singleplayer and multiple casino games."""
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import discord
 from discord.ext import commands
 
+from common import emoji_utilities
 from common.base_cog import BaseCog
 from lib.casino.casino_lib import GameSession, GameState, Player
 
+# Shown when a player bets more than they have. Art: "cat_laughing" by
+# kitsune on emoji.gg (https://emoji.gg/emoji/50009-cat-laughing).
+BROKIE_EMOJI_NAME = "cat_laughing"
+BROKIE_FALLBACK_EMOJI = "😹🫵"
+
 
 class BaseCasinoCog(BaseCog):
-    """Base cog class providing common logic for Casino cogs."""
+    """Base cog class providing common logic for Casino cogs.
+
+    Attributes:
+        emojis: Custom emojis by name, loaded from get_emoji_files().
+    """
+
+    def __init__(self, bot: commands.Bot):
+        super().__init__(bot)
+        self.emojis: dict[str, str] = {}
+
+    async def cog_load(self) -> None:
+        self.emojis = await emoji_utilities.load_emojis(
+            self.bot, self.get_emoji_files()
+        )
+
+    def get_emoji_files(self) -> dict[str, Path]:
+        """Get the image file for each custom emoji this cog uses, by name."""
+        brokie_file = emoji_utilities.EMOJI_DIR / f"{BROKIE_EMOJI_NAME}.png"
+        return {BROKIE_EMOJI_NAME: brokie_file}
+
+    def get_not_enough_funds_message(self) -> str:
+        """Get the message for a bet the player can't afford."""
+        emoji = self.emojis.get(BROKIE_EMOJI_NAME, BROKIE_FALLBACK_EMOJI)
+        return f"You can't do that, brokie {emoji}"
 
     async def validate_bet(self, interaction: discord.Interaction, bet: int) -> bool:
         """Validate that a player bet is non-negative and available.
@@ -30,7 +60,7 @@ class BaseCasinoCog(BaseCog):
         has_funds = await self.economy.validate_funds(interaction.user, bet)
         if not has_funds:
             await self.send_bet_error(
-                interaction, "You do not have enough funds to make that bet!"
+                interaction, self.get_not_enough_funds_message()
             )
             return False
 
