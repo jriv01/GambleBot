@@ -17,9 +17,7 @@ SPIN_AGAIN_TIMEOUT = 60.0
 # (https://emoji.gg/user/1132975955959369738).
 SPINNING_EMOJI_NAME = "slots_spinning"
 
-# Discord text isn't monospaced, so the paytable pads numbers with figure
-# spaces, which are as wide as a digit
-FIGURE_SPACE = " "
+# Space between the paytable's two columns
 PAYTABLE_COLUMN_GAP = " " * 2
 
 
@@ -288,7 +286,9 @@ def get_paytable_text(emojis: dict[str, str]) -> str:
     """Get a small-print summary of what each payline pays.
 
     Laid out in two columns: three of a kind on the left, cherry wins on the
-    right, with the left column's multipliers padded to line up the right.
+    right. Each line starts with its multiplier as inline code, which Discord
+    draws in a monospace font, so padding them to the same width lines both
+    columns up.
 
     Args:
         emojis: Custom emojis by name.
@@ -301,7 +301,7 @@ def get_paytable_text(emojis: dict[str, str]) -> str:
         for symbol in reversed(slots_lib.SYMBOLS)
         if symbol is not slots_lib.CHERRY
     ]
-    width = max(
+    left_width = max(
         len(format_multiplier(symbol.three_of_a_kind_multiplier))
         for symbol in left_symbols
     )
@@ -309,15 +309,21 @@ def get_paytable_text(emojis: dict[str, str]) -> str:
     for symbol in left_symbols:
         emoji = get_emoji(symbol, emojis)
         multiplier = format_multiplier(symbol.three_of_a_kind_multiplier)
-        left_column.append(f"{emoji * 3} {multiplier.rjust(width, FIGURE_SPACE)}")
+        left_column.append(f"`{multiplier.rjust(left_width)}` {emoji * 3}")
 
     cherry = get_emoji(slots_lib.CHERRY, emojis)
-    right_column = [
-        f"{cherry * 3} "
-        + format_multiplier(slots_lib.CHERRY.three_of_a_kind_multiplier),
-        f"{cherry * 2} " + format_multiplier(slots_lib.TWO_CHERRIES_MULTIPLIER),
-        f"{cherry} " + format_multiplier(slots_lib.ONE_CHERRY_MULTIPLIER),
+    cherry_wins = [
+        (3, slots_lib.CHERRY.three_of_a_kind_multiplier),
+        (2, slots_lib.TWO_CHERRIES_MULTIPLIER),
+        (1, slots_lib.ONE_CHERRY_MULTIPLIER),
     ]
+    cherry_width = max(len(format_multiplier(m)) for _, m in cherry_wins)
+    right_column = []
+    for num_cherries, cherry_multiplier in cherry_wins:
+        multiplier = format_multiplier(cherry_multiplier)
+        right_column.append(
+            f"`{multiplier.rjust(cherry_width)}` {cherry * num_cherries}"
+        )
 
     lines = [
         f"-# {left}{PAYTABLE_COLUMN_GAP}{right}".rstrip()
