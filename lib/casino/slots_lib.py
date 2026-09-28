@@ -9,9 +9,9 @@ import random
 NUM_REELS = 3
 MAX_ROWS = 10
 
-# Cherries also pay when they start a payline, without filling it
-LEADING_TWO_CHERRIES_MULTIPLIER = 2
-LEADING_CHERRY_MULTIPLIER = 0.5
+# Cherries also pay anywhere on a payline, without filling it
+TWO_CHERRIES_MULTIPLIER = 2
+ONE_CHERRY_MULTIPLIER = 1
 
 
 class Symbol:
@@ -42,12 +42,12 @@ class Symbol:
         self.three_of_a_kind_multiplier = three_of_a_kind_multiplier
 
 
-CHERRY = Symbol(name="cherry", emoji="🍒", weight=14, three_of_a_kind_multiplier=5)
-BANANA = Symbol(name="banana", emoji="🍌", weight=11, three_of_a_kind_multiplier=9)
+CHERRY = Symbol(name="cherry", emoji="🍒", weight=7, three_of_a_kind_multiplier=10)
+BANANA = Symbol(name="banana", emoji="🍌", weight=17, three_of_a_kind_multiplier=3)
 RASPBERRY = Symbol(
-    name="raspberry", emoji="🍓", weight=8, three_of_a_kind_multiplier=20
+    name="raspberry", emoji="🍓", weight=10, three_of_a_kind_multiplier=8
 )
-BAR = Symbol(name="bar", emoji="🅱️", weight=5, three_of_a_kind_multiplier=40)
+BAR = Symbol(name="bar", emoji="🅱️", weight=5, three_of_a_kind_multiplier=25)
 SEVEN = Symbol(name="seven", emoji="7️⃣", weight=2, three_of_a_kind_multiplier=250)
 
 SYMBOLS = [CHERRY, BANANA, RASPBERRY, BAR, SEVEN]
@@ -157,10 +157,11 @@ def get_multiplier(payline: list[Symbol]) -> float:
     first_symbol = payline[0]
     if is_three_of_a_kind(payline, first_symbol):
         return first_symbol.three_of_a_kind_multiplier
-    if payline[:2] == [CHERRY, CHERRY]:
-        return LEADING_TWO_CHERRIES_MULTIPLIER
-    if first_symbol is CHERRY:
-        return LEADING_CHERRY_MULTIPLIER
+    num_cherries = payline.count(CHERRY)
+    if num_cherries == 2:
+        return TWO_CHERRIES_MULTIPLIER
+    if num_cherries == 1:
+        return ONE_CHERRY_MULTIPLIER
     return 0
 
 

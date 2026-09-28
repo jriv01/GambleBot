@@ -500,8 +500,8 @@ def get_paytable_text(emojis: dict[str, str]) -> str:
     right_column = [
         f"{cherry * 3} "
         + format_multiplier(slots_lib.CHERRY.three_of_a_kind_multiplier),
-        f"{cherry * 2} " + format_multiplier(slots_lib.LEADING_TWO_CHERRIES_MULTIPLIER),
-        f"{cherry} " + format_multiplier(slots_lib.LEADING_CHERRY_MULTIPLIER),
+        f"{cherry * 2} " + format_multiplier(slots_lib.TWO_CHERRIES_MULTIPLIER),
+        f"{cherry} " + format_multiplier(slots_lib.ONE_CHERRY_MULTIPLIER),
     ]
 
     lines = [
