@@ -1,0 +1,332 @@
+"""Provides the card that displays a slot machine spin in Discord."""
+
+from itertools import zip_longest
+
+import discord
+from discord import Color
+from discord.ext import commands
+
+from lib.casino import slots_lib
+from lib.casino.slots_lib import SpinResult, Symbol
+
+# Seconds the "Spin again" button stays active
+SPIN_AGAIN_TIMEOUT = 60.0
+
+# Custom emojis for the spinning reel and each symbol. Art: "slots" (resized
+# to 128px) and "slotsitem1" to "slotsitem5" by Kurai on emoji.gg
+# (https://emoji.gg/user/1132975955959369738).
+SPINNING_EMOJI_NAME = "slots_spinning"
+
+# Space between the paytable's two columns
+PAYTABLE_COLUMN_GAP = " " * 2
+
+
+class SlotMachineView(discord.ui.LayoutView):
+    """A slot machine drawn as a card, using Discord's Components V2 layout.
+
+    Attributes:
+        container: Card holding the machine's title, reels and status.
+        spin_again_button: Button to spin again. It's disabled unless the
+            spin has finished, and always shown so the card never changes
+            height.
+    """
+
+    def __init__(
+        self,
+        reels_text: str,
+        status: str,
+        color: discord.Color,
+        result: SpinResult,
+        emojis: dict[str, str],
+        timeout: float | None = None,
+    ):
+        """Initialize a SlotMachineView instance.
+
+        Args:
+            reels_text: The reels, as drawn by get_reels_text().
+            status: Lines shown under the reels.
+            color: Color of the card's accent bar.
+            result: Outcome of the spin being shown.
+            emojis: Custom emojis by name.
+            timeout: Seconds until view stops accepting interaction.
+        """
+        super().__init__(timeout=timeout)
+        bet_text = get_bet_text(result.bet, result.num_rows)
+        self.spin_again_button = discord.ui.Button(
+            label=f"Spin again ({bet_text})",
+            emoji="🔁",
+            style=discord.ButtonStyle.primary,
+            disabled=True,
+        )
+        self.container = discord.ui.Container(
+            discord.ui.TextDisplay(f"## 🎰 Slots\n{get_paytable_text(emojis)}"),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(reels_text),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(status),
+            discord.ui.ActionRow(self.spin_again_button),
+            accent_color=color,
+        )
+        self.add_item(self.container)
+
+
+class SpinAgainView(SlotMachineView):
+    """Finished slot machine with a button to spin again with the same bet.
+
+    Attributes:
+        cog: Slots cog that runs the spin.
+        player: User who owns this slot machine.
+        result: Outcome of the spin being shown.
+        message: Discord message the view is attached to, set once shown.
+    """
+
+    def __init__(self, cog: commands.Cog, player: discord.User, result: SpinResult):
+        """Initialize a SpinAgainView instance.
+
+        Args:
+            cog: Slots cog that runs the spin.
+            player: User who owns this slot machine.
+            result: Outcome of the spin to show.
+        """
+        reels = [render_reel(reel, cog.emojis) for reel in result.reels]
+        super().__init__(
+            reels_text=get_reels_text(reels, result.payouts),
+            status=get_result_text(result),
+            color=get_result_color(result),
+            result=result,
+            emojis=cog.emojis,
+            timeout=SPIN_AGAIN_TIMEOUT,
+        )
+        self.cog = cog
+        self.player = player
+        self.result = result
+        self.message: discord.Message | None = None
+        self.spin_again_button.disabled = False
+        self.spin_again_button.callback = self.spin_again_callback
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Only let the original player press the button."""
+        if interaction.user.id == self.player.id:
+            return True
+
+        await interaction.response.send_message(
+            "This isn't your slot machine! Use /slots to play.", ephemeral=True
+        )
+        return False
+
+    async def spin_again_callback(self, interaction: discord.Interaction) -> None:
+        """Callback for "Spin again" button interaction."""
+        # A double-click or a spin in another channel is only a short wait,
+        # so keep this button usable
+        if await self.cog.reject_if_spinning(interaction):
+            return
+
+        # The new spin attaches its own view, so retire this one
+        self.stop()
+        spun = await self.cog.play_spin(
+            interaction, self.result.bet, self.result.num_rows
+        )
+
+        # The player can't afford this bet anymore
+        if not spun:
+            await self.disable_button()
+
+    async def on_timeout(self) -> None:
+        """Grey out the button after timeout."""
+        await self.disable_button()
+
+    async def disable_button(self) -> None:
+        """Grey out the button, keeping the rest of the machine on screen."""
+        self.spin_again_button.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass  # The message was deleted, so there's nothing to update
+
+
+def create_spinning_view(
+    result: SpinResult, stopped_reels: int, emojis: dict[str, str]
+) -> SlotMachineView:
+    """Create a slot machine whose reels are still spinning.
+
+    Args:
+        result: Outcome the reels will stop on.
+        stopped_reels: Number of reels, from the left, that have stopped.
+        emojis: Custom emojis by name.
+
+    Returns:
+        Slot machine showing the stopped reels and spinning ones on the rest.
+    """
+    stopped = [render_reel(reel, emojis) for reel in result.reels[:stopped_reels]]
+    spinning = [
+        get_spinning_reel(result.num_rows, emojis)
+        for _ in range(slots_lib.NUM_REELS - stopped_reels)
+    ]
+    view = SlotMachineView(
+        reels_text=get_reels_text(stopped + spinning),
+        status=get_spinning_text(result),
+        color=Color.blurple(),
+        result=result,
+        emojis=emojis,
+    )
+    # Its button is always disabled, so stop discord.py from tracking it
+    view.stop()
+    return view
+
+
+def get_emoji_name(symbol: Symbol) -> str:
+    """Get the name of a symbol's custom emoji."""
+    return f"slots_{symbol.name}"
+
+
+def get_emoji(symbol: Symbol, emojis: dict[str, str]) -> str:
+    """Get a symbol's custom emoji, or its default one if it has none.
+
+    Args:
+        symbol: Symbol to draw.
+        emojis: Custom emojis by name.
+
+    Returns:
+        The emoji to display.
+    """
+    return emojis.get(get_emoji_name(symbol), symbol.emoji)
+
+
+def render_reel(reel: list[Symbol], emojis: dict[str, str]) -> list[str]:
+    """Get the emojis to display for a reel, from top to bottom."""
+    return [get_emoji(symbol, emojis) for symbol in reel]
+
+
+def get_spinning_reel(num_rows: int, emojis: dict[str, str]) -> list[str]:
+    """Get the emojis to display for a spinning reel.
+
+    Args:
+        num_rows: Number of rows being played.
+        emojis: Custom emojis by name.
+
+    Returns:
+        The spinning reel emoji on every row, or random symbols if the bot
+        doesn't have that emoji, from top to bottom.
+    """
+    spinning_emoji = emojis.get(SPINNING_EMOJI_NAME)
+    if spinning_emoji is None:
+        return render_reel(slots_lib.spin_reel(num_rows), emojis)
+    return [spinning_emoji] * num_rows
+
+
+def get_reels_text(reels: list[list[str]], payouts: list[int] | None = None) -> str:
+    """Get the text that draws the reels.
+
+    Args:
+        reels: Emojis to display per reel.
+        payouts: Amount paid out for each row, or None while spinning.
+
+    Returns:
+        One heading-sized line per row, with arrows marking each payline
+        and, once the reels stop, what that row paid.
+    """
+    lines = []
+    for row_index, row in enumerate(zip(*reels)):
+        line = f"## ▶️ {''.join(row)} ◀️"
+        if payouts is not None:
+            line += f" {get_row_result_text(payouts[row_index])}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def get_row_result_text(payout: int) -> str:
+    """Get the short result shown at the end of a row."""
+    if payout == 0:
+        return "—"
+    return f"+{payout}"
+
+
+def get_bet_text(bet: int, num_rows: int) -> str:
+    """Get a short description of a bet, like "100 gold x 3 rows"."""
+    if num_rows == 1:
+        return f"{bet} gold"
+    return f"{bet} gold x {num_rows} rows"
+
+
+def get_spinning_text(result: SpinResult) -> str:
+    """Get the status lines while spinning, laid out like the result's."""
+    return f"Paid {result.total_bet} · Won …\n## Spinning..."
+
+
+def get_result_text(result: SpinResult) -> str:
+    """Get the status lines for a finished spin.
+
+    Args:
+        result: Outcome of the spin.
+
+    Returns:
+        What the user paid and won in total, then their net gain or loss in
+        large text.
+    """
+    return f"Paid {result.total_bet} · Won {result.total_payout}\n## Net {result.net:+}"
+
+
+def get_result_color(result: SpinResult) -> discord.Color:
+    """Get the accent color for a spin's net gain or loss, or a jackpot."""
+    if result.is_jackpot:
+        return Color.gold()
+    if result.net > 0:
+        return Color.green()
+    if result.net < 0:
+        return Color.red()
+    return Color.dark_gray()
+
+
+def format_multiplier(multiplier: float) -> str:
+    """Format a bet multiplier, like "250x" or "0.5x"."""
+    return f"{multiplier:g}x"
+
+
+def get_paytable_text(emojis: dict[str, str]) -> str:
+    """Get a small-print summary of what each payline pays.
+
+    Laid out in two columns: three of a kind on the left, cherry wins on the
+    right. Each line starts with its multiplier as inline code, which Discord
+    draws in a monospace font, so padding them to the same width lines both
+    columns up.
+
+    Args:
+        emojis: Custom emojis by name.
+
+    Returns:
+        One small-print line per row of the paytable.
+    """
+    left_symbols = [
+        symbol
+        for symbol in reversed(slots_lib.SYMBOLS)
+        if symbol is not slots_lib.CHERRY
+    ]
+    left_width = max(
+        len(format_multiplier(symbol.three_of_a_kind_multiplier))
+        for symbol in left_symbols
+    )
+    left_column = []
+    for symbol in left_symbols:
+        emoji = get_emoji(symbol, emojis)
+        multiplier = format_multiplier(symbol.three_of_a_kind_multiplier)
+        left_column.append(f"`{multiplier.rjust(left_width)}` {emoji * 3}")
+
+    cherry = get_emoji(slots_lib.CHERRY, emojis)
+    cherry_wins = [
+        (3, slots_lib.CHERRY.three_of_a_kind_multiplier),
+        (2, slots_lib.TWO_CHERRIES_MULTIPLIER),
+        (1, slots_lib.ONE_CHERRY_MULTIPLIER),
+    ]
+    cherry_width = max(len(format_multiplier(m)) for _, m in cherry_wins)
+    right_column = []
+    for num_cherries, cherry_multiplier in cherry_wins:
+        multiplier = format_multiplier(cherry_multiplier)
+        right_column.append(
+            f"`{multiplier.rjust(cherry_width)}` {cherry * num_cherries}"
+        )
+
+    lines = [
+        f"-# {left}{PAYTABLE_COLUMN_GAP}{right}".rstrip()
+        for left, right in zip_longest(left_column, right_column, fillvalue="")
+    ]
+    return "\n".join(lines)
